@@ -4,15 +4,15 @@ import (
 	"context"
 	"pinstack-post-service/internal/logger"
 	"pinstack-post-service/internal/model"
-	"pinstack-post-service/internal/repository"
+	"pinstack-post-service/internal/repository/postgres"
 )
 
 type MediaRepository struct {
 	log *logger.Logger
-	db  repository.PgDB
+	db  postgres.PgDB
 }
 
-func NewMediaRepository(db repository.PgDB, log *logger.Logger) *MediaRepository {
+func NewMediaRepository(db postgres.PgDB, log *logger.Logger) *MediaRepository {
 	return &MediaRepository{db: db, log: log}
 }
 

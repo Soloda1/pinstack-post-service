@@ -4,15 +4,15 @@ import (
 	"context"
 	"pinstack-post-service/internal/logger"
 	"pinstack-post-service/internal/model"
-	"pinstack-post-service/internal/repository"
+	"pinstack-post-service/internal/repository/postgres"
 )
 
 type TagRepository struct {
 	log *logger.Logger
-	db  repository.PgDB
+	db  postgres.PgDB
 }
 
-func NewTagRepository(db repository.PgDB, log *logger.Logger) *TagRepository {
+func NewTagRepository(db postgres.PgDB, log *logger.Logger) *TagRepository {
 	return &TagRepository{db: db, log: log}
 }
 
