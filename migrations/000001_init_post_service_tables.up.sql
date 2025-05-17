@@ -13,7 +13,7 @@ CREATE TABLE IF NOT EXISTS post_media (
       id         SERIAL        PRIMARY KEY,
       post_id    INT            NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
       url        TEXT           NOT NULL,
-      type       TEXT           NOT NULL CHECK (type IN ('photo','video')),
+      type       TEXT           NOT NULL CHECK (type IN ('image','video')),
       position   SMALLINT       NOT NULL CHECK (position BETWEEN 1 AND 9),
       created_at TIMESTAMPTZ    NOT NULL DEFAULT now()
 );
