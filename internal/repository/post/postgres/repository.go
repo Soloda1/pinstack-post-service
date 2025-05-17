@@ -9,10 +9,10 @@ import (
 
 type PostRepository struct {
 	log *logger.Logger
-	db  repository.DB
+	db  repository.PgDB
 }
 
-func NewPostRepository(db repository.DB, log *logger.Logger) *PostRepository {
+func NewPostRepository(db repository.PgDB, log *logger.Logger) *PostRepository {
 	return &PostRepository{db: db, log: log}
 }
 

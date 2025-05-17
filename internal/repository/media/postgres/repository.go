@@ -9,10 +9,10 @@ import (
 
 type MediaRepository struct {
 	log *logger.Logger
-	db  repository.DB
+	db  repository.PgDB
 }
 
-func NewMediaRepository(db repository.DB, log *logger.Logger) *MediaRepository {
+func NewMediaRepository(db repository.PgDB, log *logger.Logger) *MediaRepository {
 	return &MediaRepository{db: db, log: log}
 }
 

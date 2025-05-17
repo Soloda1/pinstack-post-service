@@ -9,10 +9,10 @@ import (
 
 type TagRepository struct {
 	log *logger.Logger
-	db  repository.DB
+	db  repository.PgDB
 }
 
-func NewTagRepository(db repository.DB, log *logger.Logger) *TagRepository {
+func NewTagRepository(db repository.PgDB, log *logger.Logger) *TagRepository {
 	return &TagRepository{db: db, log: log}
 }
 
