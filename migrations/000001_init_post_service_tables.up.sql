@@ -11,7 +11,7 @@ CREATE TABLE IF NOT EXISTS posts (
 
 CREATE TABLE IF NOT EXISTS post_media (
       id         bigint GENERATED ALWAYS AS IDENTITY        PRIMARY KEY,
-      post_id    INT            NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
+      post_id    bigint            NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
       url        TEXT           NOT NULL,
       type       TEXT           NOT NULL CHECK (type IN ('image','video')),
       position   SMALLINT       NOT NULL CHECK (position BETWEEN 1 AND 9),
@@ -25,8 +25,8 @@ CREATE TABLE IF NOT EXISTS tags (
 );
 
 CREATE TABLE IF NOT EXISTS post_tags (
-     post_id INT NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
-     tag_id  INT NOT NULL REFERENCES tags(id)  ON DELETE CASCADE,
+     post_id bigint NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
+     tag_id  bigint NOT NULL REFERENCES tags(id)  ON DELETE CASCADE,
      PRIMARY KEY (post_id, tag_id)
 );
 
