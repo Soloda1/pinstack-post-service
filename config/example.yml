@@ -1,0 +1,17 @@
+env: "dev"
+
+grpc_server:
+  address: "0.0.0.0"
+  port: 50053
+
+database:
+  username: "postgres"
+  password: "admin"
+  host: "post-db"
+  port: "5434"
+  db_name: "postservice"
+  migrations_path: "./migrations"
+
+user_service:
+  address: "user-service"
+  port: 50051
