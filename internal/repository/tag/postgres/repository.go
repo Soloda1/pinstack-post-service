@@ -26,11 +26,6 @@ func (t *TagRepository) FindByPost(ctx context.Context, postID int) ([]*model.Po
 	panic("implement me")
 }
 
-func (t *TagRepository) FindPopular(ctx context.Context, limit int) ([]*model.PostTag, error) {
-	//TODO implement me
-	panic("implement me")
-}
-
 func (t *TagRepository) Create(ctx context.Context, name string) (*model.PostTag, error) {
 	//TODO implement me
 	panic("implement me")

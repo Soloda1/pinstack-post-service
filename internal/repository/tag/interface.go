@@ -8,7 +8,6 @@ import (
 type Repository interface {
 	FindByNames(ctx context.Context, names []string) ([]*model.PostTag, error)
 	FindByPost(ctx context.Context, postID int) ([]*model.PostTag, error)
-	FindPopular(ctx context.Context, limit int) ([]*model.PostTag, error)
 	Create(ctx context.Context, name string) (*model.PostTag, error)
 	DeleteUnused(ctx context.Context) error
 	TagPost(ctx context.Context, postID int, tagNames []string) error
