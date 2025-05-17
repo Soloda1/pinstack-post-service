@@ -1,7 +1,7 @@
 
 CREATE TABLE IF NOT EXISTS posts (
-         id          SERIAL PRIMARY KEY,
-         author_id   UUID        NOT NULL,
+         id          bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+         author_id   bigint        NOT NULL,
          title       TEXT        NOT NULL,
          content     TEXT,
          created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
@@ -10,7 +10,7 @@ CREATE TABLE IF NOT EXISTS posts (
 
 
 CREATE TABLE IF NOT EXISTS post_media (
-      id         SERIAL        PRIMARY KEY,
+      id         bigint GENERATED ALWAYS AS IDENTITY        PRIMARY KEY,
       post_id    INT            NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
       url        TEXT           NOT NULL,
       type       TEXT           NOT NULL CHECK (type IN ('image','video')),
@@ -20,7 +20,7 @@ CREATE TABLE IF NOT EXISTS post_media (
 
 
 CREATE TABLE IF NOT EXISTS tags (
-    id    SERIAL PRIMARY KEY,
+    id    bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     name  TEXT   NOT NULL UNIQUE
 );
 
@@ -39,3 +39,5 @@ CREATE INDEX IF NOT EXISTS idx_post_tags_tag_id
 
 CREATE INDEX IF NOT EXISTS idx_posts_author_id
     ON posts(author_id);
+
+CREATE INDEX idx_tags_name ON tags(name);
