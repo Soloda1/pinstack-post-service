@@ -205,14 +205,7 @@ func (t *TagRepository) UntagPost(ctx context.Context, postID int64, tagNames []
 }
 
 func (t *TagRepository) ReplacePostTags(ctx context.Context, postID int64, newTags []string) error {
-	tx, err := t.db.Begin(ctx)
-	if err != nil {
-		t.log.Error("Error starting transaction", slog.String("error", err.Error()))
-		return custom_errors.ErrDatabaseTransaction
-	}
-	defer tx.Rollback(ctx)
-
-	_, err = tx.Exec(ctx, "SELECT 1 FROM posts WHERE id = @post_id", pgx.NamedArgs{"post_id": postID})
+	_, err := t.db.Exec(ctx, "SELECT 1 FROM posts WHERE id = @post_id", pgx.NamedArgs{"post_id": postID})
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return custom_errors.ErrPostNotFound
@@ -221,7 +214,7 @@ func (t *TagRepository) ReplacePostTags(ctx context.Context, postID int64, newTa
 	}
 
 	deleteQuery := `DELETE FROM posts_tags WHERE post_id = @post_id`
-	_, err = tx.Exec(ctx, deleteQuery, pgx.NamedArgs{"post_id": postID})
+	_, err = t.db.Exec(ctx, deleteQuery, pgx.NamedArgs{"post_id": postID})
 	if err != nil {
 		t.log.Error("Error deleting old tags", slog.String("error", err.Error()))
 		return custom_errors.ErrDatabaseQuery
@@ -238,7 +231,7 @@ func (t *TagRepository) ReplacePostTags(ctx context.Context, postID int64, newTa
 			})
 		}
 
-		br := tx.SendBatch(ctx, batch)
+		br := t.db.SendBatch(ctx, batch)
 		defer br.Close()
 
 		for range newTags {
@@ -248,16 +241,11 @@ func (t *TagRepository) ReplacePostTags(ctx context.Context, postID int64, newTa
 				if errors.As(err, &pgerr) && pgerr.Code == "23503" {
 					return custom_errors.ErrTagNotFound
 				}
-				t.log.Error("Error inserting new tags",
-					slog.Int64("post_id", postID),
-					slog.String("error", err.Error()))
+				t.log.Error("Error inserting new tags", slog.Int64("post_id", postID), slog.String("error", err.Error()))
 				return custom_errors.ErrDatabaseQuery
 			}
 		}
 	}
 
-	if err := tx.Commit(ctx); err != nil {
-		return custom_errors.ErrDatabaseTransaction
-	}
 	return nil
 }

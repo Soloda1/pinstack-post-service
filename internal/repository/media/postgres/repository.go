@@ -23,7 +23,8 @@ func (m *MediaRepository) Attach(ctx context.Context, postID int64, media []*mod
 	var exists bool
 	err := m.db.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM posts WHERE id = @post_id)`, pgx.NamedArgs{"post_id": postID}).Scan(&exists)
 	if err != nil {
-		return custom_errors.ErrPostNotFound
+		m.log.Error("Failed to get post by id in Attach media", slog.Int64("post_id", postID), slog.String("err", err.Error()))
+		return custom_errors.ErrDatabaseQuery
 	}
 	if !exists {
 		m.log.Warn("Post not found during media attach", slog.Int64("post_id", postID))
