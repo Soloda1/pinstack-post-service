@@ -216,8 +216,6 @@ func (p *PostRepository) List(ctx context.Context, filters model.PostFilters) ([
 		args["author_id"] = *filters.AuthorID
 	}
 	if filters.CreatedAfter != nil {
-		// Assuming filters.CreatedAfter is pgtype.Timestamptz, convert to pgtype.Timestamp if posts table uses Timestamp
-		// For simplicity, let's assume direct compatibility or that the types match (e.g. both are Timestamptz or Timestamp)
 		whereClauses = append(whereClauses, "p.created_at >= @created_after")
 		args["created_after"] = *filters.CreatedAfter
 	}
@@ -226,14 +224,8 @@ func (p *PostRepository) List(ctx context.Context, filters model.PostFilters) ([
 		args["created_before"] = *filters.CreatedBefore
 	}
 
-	// Handling TagNames requires a JOIN with post_tags and tags tables.
-	// Example: JOIN post_tags pt ON p.id = pt.post_id JOIN tags t ON pt.tag_id = t.id
-	// AND t.name = ANY(@tag_names)
 	if len(filters.TagNames) > 0 {
 		baseQuery += ` JOIN post_tags pt ON p.id = pt.post_id JOIN tags t ON pt.tag_id = t.id`
-		// Using = ANY for array comparison. Ensure TagNames is passed as a pgx array type if needed, or build OR clauses.
-		// For simplicity with NamedArgs and ILIKE, let's build OR clauses for tags if there are few.
-		// If many tags, consider passing as array: `t.name = ANY(@tag_names)` and args["tag_names"] = filters.TagNames
 		var tagClauses []string
 		for i, tagName := range filters.TagNames {
 			paramName := fmt.Sprintf("tag_name_%d", i)

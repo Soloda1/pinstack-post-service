@@ -11,4 +11,5 @@ type PgDB interface {
 	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
 	Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error)
 	Begin(ctx context.Context) (pgx.Tx, error)
+	SendBatch(ctx context.Context, b *pgx.Batch) pgx.BatchResults
 }

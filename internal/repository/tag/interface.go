@@ -6,9 +6,9 @@ import (
 )
 
 type Repository interface {
-	FindByNames(ctx context.Context, names []string) ([]*model.PostTag, error)
-	FindByPost(ctx context.Context, postID int64) ([]*model.PostTag, error)
-	Create(ctx context.Context, name string) (*model.PostTag, error)
+	FindByNames(ctx context.Context, names []string) ([]*model.Tag, error)
+	FindByPost(ctx context.Context, postID int64) ([]*model.Tag, error)
+	Create(ctx context.Context, name string) (*model.Tag, error)
 	DeleteUnused(ctx context.Context) error
 	TagPost(ctx context.Context, postID int64, tagNames []string) error
 	UntagPost(ctx context.Context, postID int64, tagNames []string) error
