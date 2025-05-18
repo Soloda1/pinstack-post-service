@@ -34,8 +34,8 @@ func (m *MediaRepository) Attach(ctx context.Context, postID int64, media []*mod
 	batch := &pgx.Batch{}
 	for _, md := range media {
 		batch.Queue(
-			`INSERT INTO post_medias (post_id, media_id, position) VALUES (@post_id, @media_id, @position)`,
-			pgx.NamedArgs{"post_id": postID, "media_id": md.ID, "position": md.Position},
+			`INSERT INTO post_media (post_id, id, url, type, position) VALUES (@post_id, @id, @url, @type, @position)`,
+			pgx.NamedArgs{"post_id": postID, "id": md.ID, "url": md.URL, "type": md.Type, "position": md.Position},
 		)
 	}
 
@@ -53,9 +53,8 @@ func (m *MediaRepository) Reorder(ctx context.Context, postID int64, newPosition
 	batch := &pgx.Batch{}
 	for mediaID, position := range newPositions {
 		batch.Queue(
-			`UPDATE post_medias SET position = @position 
-			WHERE post_id = @post_id AND media_id = @media_id`,
-			pgx.NamedArgs{"position": position, "post_id": postID, "media_id": mediaID},
+			`UPDATE post_media SET position = @position WHERE post_id = @post_id AND id = @id`,
+			pgx.NamedArgs{"position": position, "post_id": postID, "id": mediaID},
 		)
 	}
 
@@ -70,7 +69,7 @@ func (m *MediaRepository) Reorder(ctx context.Context, postID int64, newPosition
 }
 
 func (m *MediaRepository) Detach(ctx context.Context, mediaIDs []int64) error {
-	_, err := m.db.Exec(ctx, `DELETE FROM post_medias WHERE media_id = ANY(@media_ids)`, pgx.NamedArgs{"media_ids": mediaIDs})
+	_, err := m.db.Exec(ctx, `DELETE FROM post_media WHERE id = ANY(@ids)`, pgx.NamedArgs{"ids": mediaIDs})
 	if err != nil {
 		m.log.Error("Media detach failed", slog.String("error", err.Error()), slog.Any("media_ids", mediaIDs))
 		return custom_errors.ErrMediaDetachFailed
@@ -79,12 +78,7 @@ func (m *MediaRepository) Detach(ctx context.Context, mediaIDs []int64) error {
 }
 
 func (m *MediaRepository) GetByPost(ctx context.Context, postID int64) ([]*model.PostMedia, error) {
-	rows, err := m.db.Query(ctx, `SELECT media_id, position, created_at 
-		FROM post_medias 
-		WHERE post_id = @postID 
-		ORDER BY position`,
-		pgx.NamedArgs{"postID": postID},
-	)
+	rows, err := m.db.Query(ctx, `SELECT id, url, type, position, created_at FROM post_media WHERE post_id = @postID ORDER BY position`, pgx.NamedArgs{"postID": postID})
 	if err != nil {
 		m.log.Error("Media query failed", slog.String("error", err.Error()), slog.Int64("post_id", postID))
 		return nil, custom_errors.ErrMediaQueryFailed
@@ -94,7 +88,7 @@ func (m *MediaRepository) GetByPost(ctx context.Context, postID int64) ([]*model
 	var media []*model.PostMedia
 	for rows.Next() {
 		var pm model.PostMedia
-		if err := rows.Scan(&pm.ID, &pm.Position, &pm.CreatedAt); err != nil {
+		if err := rows.Scan(&pm.ID, &pm.URL, &pm.Type, &pm.Position, &pm.CreatedAt); err != nil {
 			return nil, custom_errors.ErrDatabaseQuery
 		}
 		media = append(media, &pm)
@@ -104,12 +98,7 @@ func (m *MediaRepository) GetByPost(ctx context.Context, postID int64) ([]*model
 }
 
 func (m *MediaRepository) GetByPosts(ctx context.Context, postIDs []int64) (map[int64][]*model.PostMedia, error) {
-	rows, err := m.db.Query(ctx, `SELECT post_id, media_id, position, created_at 
-		FROM post_medias 
-		WHERE post_id = ANY(@postIDs) 
-		ORDER BY post_id, position`,
-		pgx.NamedArgs{"postIDs": postIDs},
-	)
+	rows, err := m.db.Query(ctx, `SELECT post_id, id, url, type, position, created_at FROM post_media WHERE post_id = ANY(@postIDs) ORDER BY post_id, position`, pgx.NamedArgs{"postIDs": postIDs})
 	if err != nil {
 		m.log.Error("Batch media query failed", slog.String("error", err.Error()), slog.Any("post_ids", postIDs))
 		return nil, custom_errors.ErrMediaBatchQueryFailed
@@ -123,7 +112,7 @@ func (m *MediaRepository) GetByPosts(ctx context.Context, postIDs []int64) (map[
 	for rows.Next() {
 		var postID int64
 		var pm model.PostMedia
-		if err := rows.Scan(&postID, &pm.ID, &pm.Position, &pm.CreatedAt); err != nil {
+		if err := rows.Scan(&postID, &pm.ID, &pm.URL, &pm.Type, &pm.Position, &pm.CreatedAt); err != nil {
 			return nil, custom_errors.ErrDatabaseQuery
 		}
 

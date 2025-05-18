@@ -53,7 +53,7 @@ func (t *TagRepository) FindByPost(ctx context.Context, postID int64) ([]*model.
 	query := `
 		SELECT t.id, t.name 
 		FROM tags t
-		INNER JOIN posts_tags pt ON pt.tag_id = t.id
+		INNER JOIN post_tags pt ON pt.tag_id = t.id
 		WHERE pt.post_id = @post_id`
 
 	args := pgx.NamedArgs{"post_id": postID}
@@ -104,7 +104,7 @@ func (t *TagRepository) Create(ctx context.Context, name string) (*model.Tag, er
 }
 
 func (t *TagRepository) DeleteUnused(ctx context.Context) error {
-	query := `DELETE FROM tags WHERE id NOT IN (SELECT DISTINCT tag_id FROM posts_tags)`
+	query := `DELETE FROM tags WHERE id NOT IN (SELECT DISTINCT tag_id FROM post_tags)`
 
 	_, err := t.db.Exec(ctx, query)
 	if err != nil {
@@ -221,7 +221,7 @@ func (t *TagRepository) ReplacePostTags(ctx context.Context, postID int64, newTa
 
 	if len(newTags) > 0 {
 		batch := &pgx.Batch{}
-		insertQuery := `INSERT INTO posts_tags (post_id, tag_id) VALUES (@post_id, (SELECT id FROM tags WHERE name = @tag_name))`
+		insertQuery := `INSERT INTO post_tags (post_id, tag_id) VALUES (@post_id, (SELECT id FROM tags WHERE name = @tag_name))`
 
 		for _, tagName := range newTags {
 			batch.Queue(insertQuery, pgx.NamedArgs{
