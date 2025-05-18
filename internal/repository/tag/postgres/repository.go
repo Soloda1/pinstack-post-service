@@ -93,7 +93,8 @@ func (t *TagRepository) Create(ctx context.Context, name string) (*model.Tag, er
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, custom_errors.ErrTagAlreadyExists
 		}
-		if pgerr, ok := err.(*pgconn.PgError); ok && pgerr.Code == "23505" {
+		var pgerr *pgconn.PgError
+		if errors.As(err, &pgerr) && pgerr.Code == "23505" {
 			return nil, custom_errors.ErrTagAlreadyExists
 		}
 		t.log.Error("Error creating tag", slog.String("name", name), slog.String("error", err.Error()))
@@ -152,10 +153,8 @@ func (t *TagRepository) TagPost(ctx context.Context, postID int64, tagNames []st
 					return custom_errors.ErrTagNotFound
 				}
 			}
-			t.log.Error("Error tagging post",
-				slog.Int64("post_id", postID),
-				slog.String("error", err.Error()))
-			return fmt.Errorf("failed to tag post: %w", err)
+			t.log.Error("Error tagging post", slog.Int64("post_id", postID), slog.String("error", err.Error()))
+			return custom_errors.ErrTagPost
 		}
 	}
 	return nil

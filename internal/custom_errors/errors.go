@@ -102,6 +102,7 @@ var (
 	ErrTagNotFound      = errors.New("tag not found")
 	ErrInvalidTagName   = errors.New("invalid tag name")
 	ErrTagAlreadyExists = errors.New("tag already exists")
+	ErrTagPost          = errors.New("failed to tag post")
 )
 
 // Media operations
