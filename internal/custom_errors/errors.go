@@ -97,18 +97,18 @@ var (
 	ErrPostNotFound = errors.New("post not found")
 )
 
-// Ошибки медиа
-var (
-	ErrMediaNotFound      = errors.New("media not found")
-	ErrInvalidMediaType   = errors.New("invalid media type")
-	ErrMediaLimitExceeded = errors.New("media limit exceeded")
-	ErrMediaUploadFailed  = errors.New("media upload failed")
-	ErrMediaDeleteFailed  = errors.New("media delete failed")
-)
-
 // Ошибки тегов
 var (
 	ErrTagNotFound      = errors.New("tag not found")
 	ErrInvalidTagName   = errors.New("invalid tag name")
 	ErrTagAlreadyExists = errors.New("tag already exists")
+)
+
+// Media operations
+var (
+	ErrMediaAttachFailed     = errors.New("failed to attach media to post")
+	ErrMediaReorderFailed    = errors.New("failed to reorder media positions")
+	ErrMediaDetachFailed     = errors.New("failed to detach media from post")
+	ErrMediaQueryFailed      = errors.New("failed to query post media")
+	ErrMediaBatchQueryFailed = errors.New("failed to batch query posts media")
 )
