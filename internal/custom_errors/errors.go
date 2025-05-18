@@ -26,6 +26,7 @@ var (
 	ErrDatabaseConnection  = errors.New("database connection error")
 	ErrDatabaseQuery       = errors.New("database query error")
 	ErrDatabaseTransaction = errors.New("database transaction error")
+	ErrDatabaseScan        = errors.New("database scan error")
 )
 
 // Ошибки внешних сервисов
@@ -99,10 +100,17 @@ var (
 
 // Ошибки тегов
 var (
-	ErrTagNotFound      = errors.New("tag not found")
-	ErrInvalidTagName   = errors.New("invalid tag name")
-	ErrTagAlreadyExists = errors.New("tag already exists")
-	ErrTagPost          = errors.New("failed to tag post")
+	ErrTagNotFound         = errors.New("tag not found")
+	ErrInvalidTagName      = errors.New("invalid tag name")
+	ErrTagAlreadyExists    = errors.New("tag already exists")
+	ErrTagPost             = errors.New("failed to tag post")
+	ErrTagQueryFailed      = errors.New("failed to query tags")
+	ErrTagScanFailed       = errors.New("failed to scan tag row")
+	ErrTagCreateFailed     = errors.New("failed to create tag")
+	ErrTagDeleteFailed     = errors.New("failed to delete tag")
+	ErrTagUntagFailed      = errors.New("failed to untag post")
+	ErrTagInsertFailed     = errors.New("failed to insert tag relation")
+	ErrTagVerifyPostFailed = errors.New("failed to verify post for tag operation")
 )
 
 // Media operations

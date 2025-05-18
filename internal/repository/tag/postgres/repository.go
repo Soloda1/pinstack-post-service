@@ -33,7 +33,7 @@ func (t *TagRepository) FindByNames(ctx context.Context, names []string) ([]*mod
 	rows, err := t.db.Query(ctx, query, args)
 	if err != nil {
 		t.log.Error("Error finding tags by names", slog.String("error", err.Error()))
-		return nil, err
+		return nil, custom_errors.ErrTagQueryFailed
 	}
 	defer rows.Close()
 
@@ -42,7 +42,7 @@ func (t *TagRepository) FindByNames(ctx context.Context, names []string) ([]*mod
 		var tag model.Tag
 		if err := rows.Scan(&tag.ID, &tag.Name); err != nil {
 			t.log.Error("Error scanning tag row", slog.String("error", err.Error()))
-			return nil, err
+			return nil, custom_errors.ErrTagScanFailed
 		}
 		tags = append(tags, &tag)
 	}
@@ -61,7 +61,7 @@ func (t *TagRepository) FindByPost(ctx context.Context, postID int64) ([]*model.
 	rows, err := t.db.Query(ctx, query, args)
 	if err != nil {
 		t.log.Error("Error finding tags by post", slog.Int64("post_id", postID), slog.String("error", err.Error()))
-		return nil, err
+		return nil, custom_errors.ErrTagQueryFailed
 	}
 	defer rows.Close()
 
@@ -70,7 +70,7 @@ func (t *TagRepository) FindByPost(ctx context.Context, postID int64) ([]*model.
 		var tag model.Tag
 		if err := rows.Scan(&tag.ID, &tag.Name); err != nil {
 			t.log.Error("Error scanning tag row", slog.String("error", err.Error()))
-			return nil, err
+			return nil, custom_errors.ErrTagScanFailed
 		}
 		tags = append(tags, &tag)
 	}
@@ -109,7 +109,7 @@ func (t *TagRepository) DeleteUnused(ctx context.Context) error {
 	_, err := t.db.Exec(ctx, query)
 	if err != nil {
 		t.log.Error("Error deleting unused tags", slog.String("error", err.Error()))
-		return err
+		return custom_errors.ErrTagDeleteFailed
 	}
 	return nil
 }
@@ -124,7 +124,7 @@ func (t *TagRepository) TagPost(ctx context.Context, postID int64, tagNames []st
 		if errors.Is(err, pgx.ErrNoRows) {
 			return custom_errors.ErrPostNotFound
 		}
-		return fmt.Errorf("failed to verify post: %w", err)
+		return custom_errors.ErrTagVerifyPostFailed
 	}
 
 	batch := &pgx.Batch{}
@@ -170,7 +170,7 @@ func (t *TagRepository) UntagPost(ctx context.Context, postID int64, tagNames []
 		if errors.Is(err, pgx.ErrNoRows) {
 			return custom_errors.ErrPostNotFound
 		}
-		return fmt.Errorf("failed to verify post: %w", err)
+		return custom_errors.ErrTagVerifyPostFailed
 	}
 
 	batch := &pgx.Batch{}

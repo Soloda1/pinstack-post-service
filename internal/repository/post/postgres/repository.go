@@ -54,7 +54,7 @@ func (p *PostRepository) Create(ctx context.Context, post *model.Post) (*model.P
 
 	if err != nil {
 		p.log.Error("Error creating post", slog.String("error", err.Error()))
-		return nil, err
+		return nil, custom_errors.ErrDatabaseQuery
 	}
 
 	return &createdPost, nil
@@ -80,7 +80,7 @@ func (p *PostRepository) GetByID(ctx context.Context, id int64) (*model.Post, er
 			return nil, custom_errors.ErrPostNotFound
 		}
 		p.log.Error("Error getting post by id", slog.Int64("id", id), slog.String("error", err.Error()))
-		return nil, err
+		return nil, custom_errors.ErrDatabaseQuery
 	}
 	return post, nil
 }
@@ -93,7 +93,7 @@ func (p *PostRepository) GetByAuthor(ctx context.Context, authorID int64) ([]*mo
 	rows, err := p.db.Query(ctx, query, args)
 	if err != nil {
 		p.log.Error("Error getting posts by author", slog.Int64("author_id", authorID), slog.String("error", err.Error()))
-		return nil, err
+		return nil, custom_errors.ErrDatabaseQuery
 	}
 	defer rows.Close()
 
@@ -110,14 +110,14 @@ func (p *PostRepository) GetByAuthor(ctx context.Context, authorID int64) ([]*mo
 		)
 		if err != nil {
 			p.log.Error("Error scanning post during GetByAuthor", slog.Int64("author_id", authorID), slog.String("error", err.Error()))
-			return nil, err
+			return nil, custom_errors.ErrDatabaseScan
 		}
 		posts = append(posts, &post)
 	}
 
 	if err = rows.Err(); err != nil {
 		p.log.Error("Error iterating rows during GetByAuthor", slog.Int64("author_id", authorID), slog.String("error", err.Error()))
-		return nil, err
+		return nil, custom_errors.ErrDatabaseQuery
 	}
 
 	return posts, nil
@@ -151,7 +151,7 @@ func (p *PostRepository) UpdateTitle(ctx context.Context, id int64, title string
 			return nil, custom_errors.ErrPostNotFound
 		}
 		p.log.Error("Error updating post title", slog.Int64("id", id), slog.String("error", err.Error()))
-		return nil, err
+		return nil, custom_errors.ErrDatabaseQuery
 	}
 
 	return &updatedPost, nil
@@ -185,7 +185,7 @@ func (p *PostRepository) UpdateContent(ctx context.Context, id int64, content st
 			return nil, custom_errors.ErrPostNotFound
 		}
 		p.log.Error("Error updating post content", slog.Int64("id", id), slog.String("error", err.Error()))
-		return nil, err
+		return nil, custom_errors.ErrDatabaseQuery
 	}
 
 	return &updatedPost, nil
@@ -197,7 +197,7 @@ func (p *PostRepository) Delete(ctx context.Context, id int64) error {
 	result, err := p.db.Exec(ctx, query, args)
 	if err != nil {
 		p.log.Error("Error deleting post", slog.Int64("id", id), slog.String("error", err.Error()))
-		return err
+		return custom_errors.ErrDatabaseQuery
 	}
 	if result.RowsAffected() == 0 {
 		return custom_errors.ErrPostNotFound
@@ -254,7 +254,7 @@ func (p *PostRepository) List(ctx context.Context, filters model.PostFilters) ([
 	rows, err := p.db.Query(ctx, baseQuery, args)
 	if err != nil {
 		p.log.Error("Error listing posts", slog.String("error", err.Error()))
-		return nil, err
+		return nil, custom_errors.ErrDatabaseQuery
 	}
 	defer rows.Close()
 
@@ -271,14 +271,14 @@ func (p *PostRepository) List(ctx context.Context, filters model.PostFilters) ([
 		)
 		if err != nil {
 			p.log.Error("Error scanning post during List", slog.String("error", err.Error()))
-			return nil, err
+			return nil, custom_errors.ErrDatabaseScan
 		}
 		posts = append(posts, &post)
 	}
 
 	if err = rows.Err(); err != nil {
 		p.log.Error("Error iterating rows during List", slog.String("error", err.Error()))
-		return nil, err
+		return nil, custom_errors.ErrDatabaseQuery
 	}
 
 	return posts, nil
