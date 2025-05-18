@@ -11,6 +11,7 @@ import (
 	post_repository "pinstack-post-service/internal/repository/post"
 	"pinstack-post-service/internal/repository/postgres"
 	tag_repository "pinstack-post-service/internal/repository/tag"
+	"sync"
 )
 
 type PostService struct {
@@ -41,8 +42,22 @@ func NewPostService(
 }
 
 func (s *PostService) CreatePost(ctx context.Context, post *model.CreatePostDTO) (*model.PostDetailed, error) {
+	var author *model.User
+	var userErr error
+	wg := &sync.WaitGroup{}
 	createdTags := make([]*model.Tag, 0, len(post.Tags))
 	createdMedia := make([]*model.PostMedia, 0, len(post.MediaItems))
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		author, userErr = s.userClient.GetUser(ctx, post.AuthorID)
+		if userErr != nil {
+			s.log.Error("Failed to get author from user service", slog.String("error", userErr.Error()))
+			userErr = custom_errors.ErrExternalServiceError
+			return
+		}
+	}()
 
 	tx, err := s.uow.Begin(ctx)
 	if err != nil {
@@ -115,10 +130,10 @@ func (s *PostService) CreatePost(ctx context.Context, post *model.CreatePostDTO)
 		return nil, custom_errors.ErrDatabaseQuery
 	}
 
-	author, err := s.userClient.GetUser(ctx, post.AuthorID)
-	if err != nil {
-		s.log.Error("Failed to get author from user service", slog.String("error", err.Error()))
-		return nil, custom_errors.ErrExternalServiceError
+	wg.Wait()
+
+	if userErr != nil {
+		return nil, userErr
 	}
 
 	postDetailed := &model.PostDetailed{
