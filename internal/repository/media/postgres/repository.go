@@ -34,8 +34,8 @@ func (m *MediaRepository) Attach(ctx context.Context, postID int64, media []*mod
 	batch := &pgx.Batch{}
 	for _, md := range media {
 		batch.Queue(
-			`INSERT INTO post_media (post_id, id, url, type, position) VALUES (@post_id, @id, @url, @type, @position)`,
-			pgx.NamedArgs{"post_id": postID, "id": md.ID, "url": md.URL, "type": md.Type, "position": md.Position},
+			`INSERT INTO post_media (post_id, url, type, position) VALUES (@post_id, @url, @type, @position)`,
+			pgx.NamedArgs{"post_id": postID, "url": md.URL, "type": md.Type, "position": md.Position},
 		)
 	}
 

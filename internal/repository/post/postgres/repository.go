@@ -124,7 +124,7 @@ func (p *PostRepository) GetByAuthor(ctx context.Context, authorID int64) ([]*mo
 }
 
 func (p *PostRepository) UpdateTitle(ctx context.Context, id int64, title string) (*model.Post, error) {
-	updatedAt := pgtype.Timestamp{Time: time.Now(), Valid: true}
+	updatedAt := pgtype.Timestamptz{Time: time.Now(), Valid: true}
 
 	args := pgx.NamedArgs{
 		"id":         id,
@@ -158,7 +158,7 @@ func (p *PostRepository) UpdateTitle(ctx context.Context, id int64, title string
 }
 
 func (p *PostRepository) UpdateContent(ctx context.Context, id int64, content string) (*model.Post, error) {
-	updatedAt := pgtype.Timestamp{Time: time.Now(), Valid: true}
+	updatedAt := pgtype.Timestamptz{Time: time.Now(), Valid: true}
 
 	args := pgx.NamedArgs{
 		"id":         id,

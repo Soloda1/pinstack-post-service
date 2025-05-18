@@ -6,12 +6,12 @@ import (
 )
 
 type PostMedia struct {
-	ID        int64            `json:"id"`
-	PostID    int64            `json:"post_id"`
-	URL       string           `json:"url"`
-	Type      MediaType        `json:"type"`
-	Position  int32            `json:"position"`
-	CreatedAt pgtype.Timestamp `json:"created_at"`
+	ID        int64              `json:"id"`
+	PostID    int64              `json:"post_id"`
+	URL       string             `json:"url"`
+	Type      MediaType          `json:"type"`
+	Position  int32              `json:"position"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
 }
 
 type MediaType string

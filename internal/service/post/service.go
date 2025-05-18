@@ -41,6 +41,9 @@ func NewPostService(
 }
 
 func (s *PostService) CreatePost(ctx context.Context, post *model.CreatePostDTO) (*model.PostDetailed, error) {
+	createdTags := make([]*model.Tag, 0, len(post.Tags))
+	createdMedia := make([]*model.PostMedia, 0, len(post.MediaItems))
+
 	tx, err := s.uow.Begin(ctx)
 	if err != nil {
 		s.log.Error("Failed to start transaction", slog.String("error", err.Error()))
@@ -67,9 +70,8 @@ func (s *PostService) CreatePost(ctx context.Context, post *model.CreatePostDTO)
 		return nil, custom_errors.ErrDatabaseQuery
 	}
 
-	var media []*model.PostMedia
 	if post.MediaItems != nil && len(post.MediaItems) > 0 {
-
+		media := make([]*model.PostMedia, 0, len(post.MediaItems))
 		for _, m := range post.MediaItems {
 			media = append(media, &model.PostMedia{
 				PostID:   createdPost.ID,
@@ -83,9 +85,13 @@ func (s *PostService) CreatePost(ctx context.Context, post *model.CreatePostDTO)
 			s.log.Error("Failed to attach media to post", slog.String("error", err.Error()))
 			return nil, custom_errors.ErrMediaAttachFailed
 		}
+		createdMedia, err = mediaRepo.GetByPost(ctx, createdPost.ID)
+		if err != nil {
+			s.log.Error("Failed to get media by post", slog.String("error", err.Error()))
+			return nil, custom_errors.ErrMediaQueryFailed
+		}
 	}
 
-	var tags []*model.Tag
 	if post.Tags != nil && len(post.Tags) > 0 {
 		for _, name := range post.Tags {
 			createdTag, err := tagRepo.Create(ctx, name)
@@ -93,7 +99,7 @@ func (s *PostService) CreatePost(ctx context.Context, post *model.CreatePostDTO)
 				s.log.Error("Failed to create tag", slog.String("error", err.Error()))
 				return nil, custom_errors.ErrTagCreateFailed
 			}
-			tags = append(tags, createdTag)
+			createdTags = append(createdTags, createdTag)
 		}
 
 		err = tagRepo.TagPost(ctx, createdPost.ID, post.Tags)
@@ -109,7 +115,7 @@ func (s *PostService) CreatePost(ctx context.Context, post *model.CreatePostDTO)
 		return nil, custom_errors.ErrDatabaseQuery
 	}
 
-	author, err := s.userClient.GetUser(ctx, createdPost.AuthorID)
+	author, err := s.userClient.GetUser(ctx, post.AuthorID)
 	if err != nil {
 		s.log.Error("Failed to get author from user service", slog.String("error", err.Error()))
 		return nil, custom_errors.ErrExternalServiceError
@@ -118,8 +124,8 @@ func (s *PostService) CreatePost(ctx context.Context, post *model.CreatePostDTO)
 	postDetailed := &model.PostDetailed{
 		Post:   createdPost,
 		Author: author,
-		Media:  media,
-		Tags:   tags,
+		Media:  createdMedia,
+		Tags:   createdTags,
 	}
 	return postDetailed, nil
 }
