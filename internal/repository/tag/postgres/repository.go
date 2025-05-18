@@ -118,6 +118,14 @@ func (t *TagRepository) TagPost(ctx context.Context, postID int64, tagNames []st
 		return nil
 	}
 
+	_, err := t.db.Exec(ctx, "SELECT 1 FROM posts WHERE id = @post_id", pgx.NamedArgs{"post_id": postID})
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return custom_errors.ErrPostNotFound
+		}
+		return fmt.Errorf("failed to verify post: %w", err)
+	}
+
 	batch := &pgx.Batch{}
 	query := `INSERT INTO posts_tags (post_id, tag_id) VALUES (@post_id, (SELECT id FROM tags WHERE name = @tag_name))`
 
@@ -135,8 +143,14 @@ func (t *TagRepository) TagPost(ctx context.Context, postID int64, tagNames []st
 	for range tagNames {
 		_, err := br.Exec()
 		if err != nil {
-			if pgerr, ok := err.(*pgconn.PgError); ok && pgerr.Code == "23505" {
-				continue
+			var pgerr *pgconn.PgError
+			if errors.As(err, &pgerr) {
+				switch pgerr.Code {
+				case "23505":
+					continue
+				case "23503":
+					return custom_errors.ErrTagNotFound
+				}
 			}
 			t.log.Error("Error tagging post",
 				slog.Int64("post_id", postID),
@@ -150,6 +164,14 @@ func (t *TagRepository) TagPost(ctx context.Context, postID int64, tagNames []st
 func (t *TagRepository) UntagPost(ctx context.Context, postID int64, tagNames []string) error {
 	if len(tagNames) == 0 {
 		return nil
+	}
+
+	_, err := t.db.Exec(ctx, "SELECT 1 FROM posts WHERE id = @post_id", pgx.NamedArgs{"post_id": postID})
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return custom_errors.ErrPostNotFound
+		}
+		return fmt.Errorf("failed to verify post: %w", err)
 	}
 
 	batch := &pgx.Batch{}
@@ -171,6 +193,10 @@ func (t *TagRepository) UntagPost(ctx context.Context, postID int64, tagNames []
 	for range tagNames {
 		_, err := br.Exec()
 		if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+			var pgerr *pgconn.PgError
+			if errors.As(err, &pgerr) && pgerr.Code == "23503" {
+				return custom_errors.ErrTagNotFound
+			}
 			t.log.Error("Error untagging post", slog.Int64("post_id", postID), slog.String("error", err.Error()))
 			return err
 		}
@@ -182,15 +208,23 @@ func (t *TagRepository) ReplacePostTags(ctx context.Context, postID int64, newTa
 	tx, err := t.db.Begin(ctx)
 	if err != nil {
 		t.log.Error("Error starting transaction", slog.String("error", err.Error()))
-		return err
+		return custom_errors.ErrDatabaseTransaction
 	}
 	defer tx.Rollback(ctx)
+
+	_, err = tx.Exec(ctx, "SELECT 1 FROM posts WHERE id = @post_id", pgx.NamedArgs{"post_id": postID})
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return custom_errors.ErrPostNotFound
+		}
+		return fmt.Errorf("failed to verify post: %w", err)
+	}
 
 	deleteQuery := `DELETE FROM posts_tags WHERE post_id = @post_id`
 	_, err = tx.Exec(ctx, deleteQuery, pgx.NamedArgs{"post_id": postID})
 	if err != nil {
 		t.log.Error("Error deleting old tags", slog.String("error", err.Error()))
-		return err
+		return custom_errors.ErrDatabaseQuery
 	}
 
 	if len(newTags) > 0 {
@@ -209,14 +243,21 @@ func (t *TagRepository) ReplacePostTags(ctx context.Context, postID int64, newTa
 
 		for range newTags {
 			_, err := br.Exec()
-			if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+			if err != nil {
+				var pgerr *pgconn.PgError
+				if errors.As(err, &pgerr) && pgerr.Code == "23503" {
+					return custom_errors.ErrTagNotFound
+				}
 				t.log.Error("Error inserting new tags",
 					slog.Int64("post_id", postID),
 					slog.String("error", err.Error()))
-				return fmt.Errorf("failed to replace tags: %w", err)
+				return custom_errors.ErrDatabaseQuery
 			}
 		}
 	}
 
-	return tx.Commit(ctx)
+	if err := tx.Commit(ctx); err != nil {
+		return custom_errors.ErrDatabaseTransaction
+	}
+	return nil
 }
