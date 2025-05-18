@@ -7,10 +7,10 @@ import (
 
 type Repository interface {
 	FindByNames(ctx context.Context, names []string) ([]*model.PostTag, error)
-	FindByPost(ctx context.Context, postID int) ([]*model.PostTag, error)
+	FindByPost(ctx context.Context, postID int64) ([]*model.PostTag, error)
 	Create(ctx context.Context, name string) (*model.PostTag, error)
 	DeleteUnused(ctx context.Context) error
-	TagPost(ctx context.Context, postID int, tagNames []string) error
-	UntagPost(ctx context.Context, postID int, tagNames []string) error
-	ReplacePostTags(ctx context.Context, postID int, newTags []string) error
+	TagPost(ctx context.Context, postID int64, tagNames []string) error
+	UntagPost(ctx context.Context, postID int64, tagNames []string) error
+	ReplacePostTags(ctx context.Context, postID int64, newTags []string) error
 }

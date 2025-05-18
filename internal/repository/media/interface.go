@@ -6,9 +6,9 @@ import (
 )
 
 type Repository interface {
-	Attach(ctx context.Context, postID int, media []*model.PostMedia) error
-	Reorder(ctx context.Context, postID int, newPositions map[int]int) error
-	Detach(ctx context.Context, mediaIDs []int) error
-	GetByPost(ctx context.Context, postID int) ([]*model.PostMedia, error)
-	GetByPosts(ctx context.Context, postIDs []int) (map[int][]*model.PostMedia, error)
+	Attach(ctx context.Context, postID int64, media []*model.PostMedia) error
+	Reorder(ctx context.Context, postID int64, newPositions map[int64]int) error
+	Detach(ctx context.Context, mediaIDs []int64) error
+	GetByPost(ctx context.Context, postID int64) ([]*model.PostMedia, error)
+	GetByPosts(ctx context.Context, postIDs []int64) (map[int64][]*model.PostMedia, error)
 }

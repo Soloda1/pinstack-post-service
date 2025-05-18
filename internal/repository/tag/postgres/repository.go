@@ -21,7 +21,7 @@ func (t *TagRepository) FindByNames(ctx context.Context, names []string) ([]*mod
 	panic("implement me")
 }
 
-func (t *TagRepository) FindByPost(ctx context.Context, postID int) ([]*model.PostTag, error) {
+func (t *TagRepository) FindByPost(ctx context.Context, postID int64) ([]*model.PostTag, error) {
 	//TODO implement me
 	panic("implement me")
 }
@@ -36,17 +36,17 @@ func (t *TagRepository) DeleteUnused(ctx context.Context) error {
 	panic("implement me")
 }
 
-func (t *TagRepository) TagPost(ctx context.Context, postID int, tagNames []string) error {
+func (t *TagRepository) TagPost(ctx context.Context, postID int64, tagNames []string) error {
 	//TODO implement me
 	panic("implement me")
 }
 
-func (t *TagRepository) UntagPost(ctx context.Context, postID int, tagNames []string) error {
+func (t *TagRepository) UntagPost(ctx context.Context, postID int64, tagNames []string) error {
 	//TODO implement me
 	panic("implement me")
 }
 
-func (t *TagRepository) ReplacePostTags(ctx context.Context, postID int, newTags []string) error {
+func (t *TagRepository) ReplacePostTags(ctx context.Context, postID int64, newTags []string) error {
 	//TODO implement me
 	panic("implement me")
 }

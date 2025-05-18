@@ -16,27 +16,27 @@ func NewMediaRepository(db postgres.PgDB, log *logger.Logger) *MediaRepository {
 	return &MediaRepository{db: db, log: log}
 }
 
-func (m *MediaRepository) Attach(ctx context.Context, postID int, media []*model.PostMedia) error {
+func (m *MediaRepository) Attach(ctx context.Context, postID int64, media []*model.PostMedia) error {
 	//TODO implement me
 	panic("implement me")
 }
 
-func (m *MediaRepository) Reorder(ctx context.Context, postID int, newPositions map[int]int) error {
+func (m *MediaRepository) Reorder(ctx context.Context, postID int64, newPositions map[int64]int) error {
 	//TODO implement me
 	panic("implement me")
 }
 
-func (m *MediaRepository) Detach(ctx context.Context, mediaIDs []int) error {
+func (m *MediaRepository) Detach(ctx context.Context, mediaIDs []int64) error {
 	//TODO implement me
 	panic("implement me")
 }
 
-func (m *MediaRepository) GetByPost(ctx context.Context, postID int) ([]*model.PostMedia, error) {
+func (m *MediaRepository) GetByPost(ctx context.Context, postID int64) ([]*model.PostMedia, error) {
 	//TODO implement me
 	panic("implement me")
 }
 
-func (m *MediaRepository) GetByPosts(ctx context.Context, postIDs []int) (map[int][]*model.PostMedia, error) {
+func (m *MediaRepository) GetByPosts(ctx context.Context, postIDs []int64) (map[int64][]*model.PostMedia, error) {
 	//TODO implement me
 	panic("implement me")
 }

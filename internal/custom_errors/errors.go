@@ -91,3 +91,24 @@ var (
 	ErrInvalidToken = errors.New("invalid token")
 	ErrExpiredToken = errors.New("token has expired")
 )
+
+// Ошибки постов
+var (
+	ErrPostNotFound = errors.New("post not found")
+)
+
+// Ошибки медиа
+var (
+	ErrMediaNotFound      = errors.New("media not found")
+	ErrInvalidMediaType   = errors.New("invalid media type")
+	ErrMediaLimitExceeded = errors.New("media limit exceeded")
+	ErrMediaUploadFailed  = errors.New("media upload failed")
+	ErrMediaDeleteFailed  = errors.New("media delete failed")
+)
+
+// Ошибки тегов
+var (
+	ErrTagNotFound      = errors.New("tag not found")
+	ErrInvalidTagName   = errors.New("invalid tag name")
+	ErrTagAlreadyExists = errors.New("tag already exists")
+)
