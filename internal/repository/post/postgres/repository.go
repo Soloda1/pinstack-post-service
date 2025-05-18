@@ -5,24 +5,23 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"pinstack-post-service/internal/repository/postgres/db"
 	"strings"
 	"time"
 
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 	"pinstack-post-service/internal/custom_errors"
 	"pinstack-post-service/internal/logger"
 	"pinstack-post-service/internal/model"
-	"pinstack-post-service/internal/repository/postgres"
-
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 type PostRepository struct {
 	log *logger.Logger
-	db  postgres.PgDB
+	db  db.PgDB
 }
 
-func NewPostRepository(db postgres.PgDB, log *logger.Logger) *PostRepository {
+func NewPostRepository(db db.PgDB, log *logger.Logger) *PostRepository {
 	return &PostRepository{db: db, log: log}
 }
 
@@ -123,17 +122,28 @@ func (p *PostRepository) GetByAuthor(ctx context.Context, authorID int64) ([]*mo
 	return posts, nil
 }
 
-func (p *PostRepository) UpdateTitle(ctx context.Context, id int64, title string) (*model.Post, error) {
-	updatedAt := pgtype.Timestamptz{Time: time.Now(), Valid: true}
+func (p *PostRepository) Update(ctx context.Context, id int64, update *model.UpdatePostDTO) (*model.Post, error) {
+	setClauses := []string{}
+	args := pgx.NamedArgs{"id": id}
 
-	args := pgx.NamedArgs{
-		"id":         id,
-		"title":      title,
-		"updated_at": updatedAt,
+	if update.Title != nil {
+		setClauses = append(setClauses, "title = @title")
+		args["title"] = *update.Title
+	}
+	if update.Content != nil {
+		setClauses = append(setClauses, "content = @content")
+		args["content"] = *update.Content
 	}
 
-	query := `UPDATE posts SET title = @title, updated_at = @updated_at WHERE id = @id
-		RETURNING id, author_id, title, content, created_at, updated_at`
+	updatedAt := pgtype.Timestamptz{Time: time.Now(), Valid: true}
+	setClauses = append(setClauses, "updated_at = @updated_at")
+	args["updated_at"] = updatedAt
+
+	if len(setClauses) == 0 {
+		return nil, custom_errors.ErrNoUpdateRows
+	}
+
+	query := "UPDATE posts SET " + strings.Join(setClauses, ", ") + " WHERE id = @id RETURNING id, author_id, title, content, created_at, updated_at"
 
 	var updatedPost model.Post
 	err := p.db.QueryRow(ctx, query, args).Scan(
@@ -147,44 +157,10 @@ func (p *PostRepository) UpdateTitle(ctx context.Context, id int64, title string
 
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			p.log.Debug("Post not found by id during UpdateTitle", slog.Int64("id", id), slog.String("error", err.Error()))
+			p.log.Debug("Post not found by id during Update", slog.Int64("id", id), slog.String("error", err.Error()))
 			return nil, custom_errors.ErrPostNotFound
 		}
-		p.log.Error("Error updating post title", slog.Int64("id", id), slog.String("error", err.Error()))
-		return nil, custom_errors.ErrDatabaseQuery
-	}
-
-	return &updatedPost, nil
-}
-
-func (p *PostRepository) UpdateContent(ctx context.Context, id int64, content string) (*model.Post, error) {
-	updatedAt := pgtype.Timestamptz{Time: time.Now(), Valid: true}
-
-	args := pgx.NamedArgs{
-		"id":         id,
-		"content":    content,
-		"updated_at": updatedAt,
-	}
-
-	query := `UPDATE posts SET content = @content, updated_at = @updated_at WHERE id = @id
-		RETURNING id, author_id, title, content, created_at, updated_at`
-
-	var updatedPost model.Post
-	err := p.db.QueryRow(ctx, query, args).Scan(
-		&updatedPost.ID,
-		&updatedPost.AuthorID,
-		&updatedPost.Title,
-		&updatedPost.Content,
-		&updatedPost.CreatedAt,
-		&updatedPost.UpdatedAt,
-	)
-
-	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			p.log.Debug("Post not found by id during UpdateContent", slog.Int64("id", id), slog.String("error", err.Error()))
-			return nil, custom_errors.ErrPostNotFound
-		}
-		p.log.Error("Error updating post content", slog.Int64("id", id), slog.String("error", err.Error()))
+		p.log.Error("Error updating post", slog.Int64("id", id), slog.String("error", err.Error()))
 		return nil, custom_errors.ErrDatabaseQuery
 	}
 

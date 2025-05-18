@@ -2,6 +2,7 @@ package post_service
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	user_client "pinstack-post-service/internal/clients/user"
 	"pinstack-post-service/internal/custom_errors"
@@ -81,8 +82,12 @@ func (s *PostService) CreatePost(ctx context.Context, post *model.CreatePostDTO)
 	}
 	createdPost, err := postRepo.Create(ctx, newPost)
 	if err != nil {
+		if errors.Is(err, custom_errors.ErrDatabaseQuery) {
+			s.log.Error("Database error in create post", slog.String("error", err.Error()))
+			return nil, custom_errors.ErrDatabaseQuery
+		}
 		s.log.Error("Failed to create post", slog.String("error", err.Error()))
-		return nil, custom_errors.ErrDatabaseQuery
+		return nil, err
 	}
 
 	if post.MediaItems != nil && len(post.MediaItems) > 0 {
@@ -111,16 +116,40 @@ func (s *PostService) CreatePost(ctx context.Context, post *model.CreatePostDTO)
 		for _, name := range post.Tags {
 			createdTag, err := tagRepo.Create(ctx, name)
 			if err != nil {
-				s.log.Error("Failed to create tag", slog.String("error", err.Error()))
-				return nil, custom_errors.ErrTagCreateFailed
+				if errors.Is(err, custom_errors.ErrTagAlreadyExists) {
+					s.log.Debug("Тег уже существует", slog.String("error", err.Error()))
+					return nil, custom_errors.ErrTagAlreadyExists
+				}
+				if errors.Is(err, custom_errors.ErrTagCreateFailed) {
+					s.log.Error("Ошибка создания тега", slog.String("error", err.Error()))
+					return nil, custom_errors.ErrTagCreateFailed
+				}
+				s.log.Error("Неизвестная ошибка при создании тега", slog.String("error", err.Error()))
+				return nil, err
 			}
 			createdTags = append(createdTags, createdTag)
 		}
 
 		err = tagRepo.TagPost(ctx, createdPost.ID, post.Tags)
 		if err != nil {
-			s.log.Error("Failed to add tags to post", slog.String("error", err.Error()))
-			return nil, custom_errors.ErrTagPost
+			if errors.Is(err, custom_errors.ErrPostNotFound) {
+				s.log.Debug("Пост не найден при добавлении тегов", slog.String("error", err.Error()))
+				return nil, custom_errors.ErrPostNotFound
+			}
+			if errors.Is(err, custom_errors.ErrTagNotFound) {
+				s.log.Debug("Тег не найден при добавлении к посту", slog.String("error", err.Error()))
+				return nil, custom_errors.ErrTagNotFound
+			}
+			if errors.Is(err, custom_errors.ErrTagVerifyPostFailed) {
+				s.log.Error("Ошибка верификации поста при добавлении тегов", slog.String("error", err.Error()))
+				return nil, custom_errors.ErrTagVerifyPostFailed
+			}
+			if errors.Is(err, custom_errors.ErrTagPost) {
+				s.log.Error("Ошибка добавления тегов к посту", slog.String("error", err.Error()))
+				return nil, custom_errors.ErrTagPost
+			}
+			s.log.Error("Неизвестная ошибка при добавлении тегов", slog.String("error", err.Error()))
+			return nil, err
 		}
 	}
 
@@ -146,15 +175,129 @@ func (s *PostService) CreatePost(ctx context.Context, post *model.CreatePostDTO)
 }
 
 func (s *PostService) GetPostByID(ctx context.Context, id int64) (*model.PostDetailed, error) {
-	panic("implement")
+	post, err := s.postRepo.GetByID(ctx, id)
+	if err != nil {
+		switch {
+		case errors.Is(err, custom_errors.ErrPostNotFound):
+			s.log.Debug("Post not found", slog.Int64("id", id))
+			return nil, custom_errors.ErrPostNotFound
+		default:
+			s.log.Error("Failed to get post by id",
+				slog.String("error", err.Error()),
+				slog.Int64("id", id))
+			return nil, custom_errors.ErrDatabaseQuery
+		}
+	}
+
+	media, err := s.mediaRepo.GetByPost(ctx, id)
+	if err != nil {
+		switch {
+		case errors.Is(err, custom_errors.ErrMediaNotFound):
+			s.log.Debug("Media not found for post", slog.Int64("id", id))
+			return nil, custom_errors.ErrMediaNotFound
+		default:
+			s.log.Error("Failed to get media by post",
+				slog.String("error", err.Error()),
+				slog.Int64("id", id))
+			return nil, custom_errors.ErrDatabaseQuery
+		}
+	}
+
+	tags, err := s.tagRepo.FindByPost(ctx, id)
+	if err != nil {
+		switch {
+		case errors.Is(err, custom_errors.ErrTagsNotFound):
+			s.log.Debug("Tags not found for post", slog.Int64("id", id))
+			return nil, custom_errors.ErrTagsNotFound
+		default:
+			s.log.Error("Failed to find tags by post",
+				slog.String("error", err.Error()),
+				slog.Int64("id", id))
+			return nil, custom_errors.ErrDatabaseQuery
+		}
+	}
+
+	author, err := s.userClient.GetUser(ctx, post.AuthorID)
+	if err != nil {
+		switch {
+		case errors.Is(err, custom_errors.ErrUserNotFound):
+			s.log.Debug("Author not found", slog.Int64("authorID", post.AuthorID))
+			return nil, custom_errors.ErrUserNotFound
+		default:
+			s.log.Error("Failed to get author",
+				slog.String("error", err.Error()),
+				slog.Int64("authorID", post.AuthorID))
+			return nil, custom_errors.ErrDatabaseQuery
+		}
+	}
+
+	postDetailed := &model.PostDetailed{
+		Post:   post,
+		Author: author,
+		Media:  media,
+		Tags:   tags,
+	}
+	return postDetailed, nil
 }
 
 func (s *PostService) ListPosts(ctx context.Context, filters *model.PostFilters) ([]*model.PostDetailed, error) {
-	panic("implement")
+	posts, err := s.postRepo.List(ctx, *filters)
+	if err != nil {
+		s.log.Error("Failed to list posts", slog.String("error", err.Error()))
+		return nil, custom_errors.ErrDatabaseQuery
+	}
+
+	result := make([]*model.PostDetailed, 0, len(posts))
+	for _, post := range posts {
+		media, err := s.mediaRepo.GetByPost(ctx, post.ID)
+		if err != nil {
+			switch {
+			case errors.Is(err, custom_errors.ErrMediaNotFound):
+				s.log.Debug("Media not found for post", slog.Int64("id", post.ID))
+				media = nil
+			default:
+				s.log.Error("Failed to get media by post", slog.String("error", err.Error()), slog.Int64("id", post.ID))
+				return nil, custom_errors.ErrDatabaseQuery
+			}
+		}
+
+		tags, err := s.tagRepo.FindByPost(ctx, post.ID)
+		if err != nil {
+			switch {
+			case errors.Is(err, custom_errors.ErrTagsNotFound):
+				s.log.Debug("Tags not found for post", slog.Int64("id", post.ID))
+				tags = nil
+			default:
+				s.log.Error("Failed to find tags by post", slog.String("error", err.Error()), slog.Int64("id", post.ID))
+				return nil, custom_errors.ErrDatabaseQuery
+			}
+		}
+
+		author, err := s.userClient.GetUser(ctx, post.AuthorID)
+		if err != nil {
+			switch {
+			case errors.Is(err, custom_errors.ErrUserNotFound):
+				s.log.Debug("Author not found", slog.Int64("authorID", post.AuthorID))
+				return nil, custom_errors.ErrUserNotFound
+			default:
+				s.log.Error("Failed to get author", slog.String("error", err.Error()), slog.Int64("authorID", post.AuthorID))
+				return nil, custom_errors.ErrDatabaseQuery
+			}
+		}
+
+		postDetailed := &model.PostDetailed{
+			Post:   post,
+			Author: author,
+			Media:  media,
+			Tags:   tags,
+		}
+		result = append(result, postDetailed)
+	}
+	return result, nil
 }
 
 func (s *PostService) UpdatePost(ctx context.Context, id int64, post *model.UpdatePostDTO) error {
-	panic("implement")
+	panic("gbergreg")
 }
 
 func (s *PostService) DeletePost(ctx context.Context, id int64) error {

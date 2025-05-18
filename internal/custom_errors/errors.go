@@ -95,11 +95,13 @@ var (
 
 // Ошибки постов
 var (
+	ErrNoUpdateRows = errors.New("no post update rows")
 	ErrPostNotFound = errors.New("post not found")
 )
 
 // Ошибки тегов
 var (
+	ErrTagsNotFound        = errors.New("tags not found")
 	ErrTagNotFound         = errors.New("tag not found")
 	ErrInvalidTagName      = errors.New("invalid tag name")
 	ErrTagAlreadyExists    = errors.New("tag already exists")
@@ -115,6 +117,8 @@ var (
 
 // Media operations
 var (
+	ErrMediaRemoveFailed     = errors.New("media remove failed")
+	ErrMediaNotFound         = errors.New("media not found")
 	ErrMediaAttachFailed     = errors.New("failed to attach media to post")
 	ErrMediaReorderFailed    = errors.New("failed to reorder media positions")
 	ErrMediaDetachFailed     = errors.New("failed to detach media from post")
