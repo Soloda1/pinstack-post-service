@@ -16,6 +16,7 @@ var (
 
 // Ошибки валидации
 var (
+	ErrPostValidation   = errors.New("post validation failed")
 	ErrValidationFailed = errors.New("validation failed")
 	ErrInvalidInput     = errors.New("invalid input")
 	ErrRequiredField    = errors.New("required field is missing")
