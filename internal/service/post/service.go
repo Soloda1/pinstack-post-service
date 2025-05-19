@@ -21,7 +21,7 @@ type PostService struct {
 	mediaRepo  media_repository.Repository
 	uow        postgres.UnitOfWork
 	log        *logger.Logger
-	userClient user_client.UserClient
+	userClient user_client.Client
 }
 
 func NewPostService(
@@ -30,7 +30,7 @@ func NewPostService(
 	mediaRepo media_repository.Repository,
 	uow postgres.UnitOfWork,
 	log *logger.Logger,
-	userClient user_client.UserClient,
+	userClient user_client.Client,
 ) *PostService {
 	return &PostService{
 		postRepo:   postRepo,
