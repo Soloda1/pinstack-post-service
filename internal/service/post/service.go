@@ -403,7 +403,7 @@ func (s *PostService) UpdatePost(ctx context.Context, id int64, post *model.Upda
 	return nil
 }
 
-func (s *PostService) DeletePost(ctx context.Context, id int64) error {
+func (s *PostService) DeletePost(ctx context.Context, userID int64, id int64) error {
 	tx, err := s.uow.Begin(ctx)
 	if err != nil {
 		s.log.Error("Failed to start transaction", slog.String("error", err.Error()))
@@ -418,6 +418,21 @@ func (s *PostService) DeletePost(ctx context.Context, id int64) error {
 	postRepo := tx.PostRepository()
 	mediaRepo := tx.MediaRepository()
 	tagRepo := tx.TagRepository()
+
+	post, err := postRepo.GetByID(ctx, id)
+	if err != nil {
+		if errors.Is(err, custom_errors.ErrPostNotFound) {
+			s.log.Debug("Post not found when deleting post", slog.String("error", err.Error()))
+			return custom_errors.ErrPostNotFound
+		} else {
+			s.log.Error("Failed to get post", slog.String("error", err.Error()), slog.Int64("id", id))
+			return custom_errors.ErrDatabaseQuery
+		}
+	}
+	if post.AuthorID != userID {
+		s.log.Debug("User is not author of post", slog.String("error", err.Error()))
+		return custom_errors.ErrInvalidInput
+	}
 
 	media, err := mediaRepo.GetByPost(ctx, id)
 	if err != nil {

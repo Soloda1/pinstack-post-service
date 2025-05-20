@@ -14,7 +14,7 @@ import (
 )
 
 type PostDeleter interface {
-	DeletePost(ctx context.Context, id int64) error
+	DeletePost(ctx context.Context, userID int64, id int64) error
 }
 
 type DeletePostHandler struct {
@@ -43,7 +43,7 @@ func (h *DeletePostHandler) DeletePost(ctx context.Context, req *pb.DeletePostRe
 		return nil, status.Errorf(codes.InvalidArgument, "invalid request: %v", err)
 	}
 
-	err := h.postService.DeletePost(ctx, req.GetId())
+	err := h.postService.DeletePost(ctx, req.GetUserId(), req.GetId())
 	if err != nil {
 		switch {
 		case errors.Is(err, custom_errors.ErrPostNotFound):
