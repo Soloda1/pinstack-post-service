@@ -296,7 +296,7 @@ func (s *PostService) ListPosts(ctx context.Context, filters *model.PostFilters)
 	return result, nil
 }
 
-func (s *PostService) UpdatePost(ctx context.Context, id int64, post *model.UpdatePostDTO) error {
+func (s *PostService) UpdatePost(ctx context.Context, userID int64, id int64, post *model.UpdatePostDTO) error {
 	tx, err := s.uow.Begin(ctx)
 	if err != nil {
 		s.log.Error("Failed to start transaction", slog.String("error", err.Error()))
@@ -311,6 +311,20 @@ func (s *PostService) UpdatePost(ctx context.Context, id int64, post *model.Upda
 	postRepo := tx.PostRepository()
 	mediaRepo := tx.MediaRepository()
 	tagRepo := tx.TagRepository()
+
+	existingPost, err := postRepo.GetByID(ctx, id)
+	if err != nil {
+		if errors.Is(err, custom_errors.ErrPostNotFound) {
+			s.log.Debug("Post not found for update", slog.Int64("id", id))
+			return custom_errors.ErrPostNotFound
+		}
+		s.log.Error("Failed to get post for update", slog.String("error", err.Error()), slog.Int64("id", id))
+		return custom_errors.ErrDatabaseQuery
+	}
+	if existingPost.AuthorID != userID {
+		s.log.Debug("User is not author of post", slog.Int64("userID", userID), slog.Int64("authorID", existingPost.AuthorID))
+		return custom_errors.ErrInvalidInput
+	}
 
 	_, err = postRepo.Update(ctx, id, post)
 	if err != nil {

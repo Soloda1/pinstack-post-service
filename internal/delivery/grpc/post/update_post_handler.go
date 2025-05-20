@@ -15,7 +15,7 @@ import (
 )
 
 type PostUpdater interface {
-	UpdatePost(ctx context.Context, id int64, post *model.UpdatePostDTO) error
+	UpdatePost(ctx context.Context, userID int64, id int64, post *model.UpdatePostDTO) error
 	GetPostByID(ctx context.Context, id int64) (*model.PostDetailed, error)
 }
 
@@ -72,19 +72,22 @@ func (h *UpdatePostHandler) UpdatePost(ctx context.Context, req *pb.UpdatePostRe
 	}
 
 	updateDTO := &model.UpdatePostDTO{
+		UserID:     req.GetUserId(),
 		Title:      &req.Title,
 		Content:    &req.Content,
 		Tags:       req.GetTags(),
 		MediaItems: dtoMediaItems,
 	}
 
-	err := h.postService.UpdatePost(ctx, req.GetId(), updateDTO)
+	err := h.postService.UpdatePost(ctx, req.GetUserId(), req.GetId(), updateDTO)
 	if err != nil {
 		switch {
 		case errors.Is(err, custom_errors.ErrPostNotFound):
 			return nil, status.Errorf(codes.NotFound, "post not found: %v", err)
 		case errors.Is(err, custom_errors.ErrPostValidation):
 			return nil, status.Errorf(codes.InvalidArgument, "post update validation failed: %v", err)
+		case errors.Is(err, custom_errors.ErrInvalidInput):
+			return nil, status.Errorf(codes.PermissionDenied, "user is not author of post: %v", err)
 		default:
 			return nil, status.Errorf(codes.Internal, "failed to update post: %v", err)
 		}
