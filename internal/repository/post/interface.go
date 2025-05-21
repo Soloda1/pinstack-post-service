@@ -5,6 +5,7 @@ import (
 	"pinstack-post-service/internal/model"
 )
 
+//go:generate mockery --name Repository --dir . --output ../../../mocks --outpkg mocks --with-expecter --filename PostRepository.go
 type Repository interface {
 	Create(ctx context.Context, post *model.Post) (*model.Post, error)
 	GetByID(ctx context.Context, id int64) (*model.Post, error)

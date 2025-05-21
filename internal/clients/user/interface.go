@@ -5,7 +5,7 @@ import (
 	"pinstack-post-service/internal/model"
 )
 
-//go:generate mockery --name UserClient --dir . --output ../../../mocks --outpkg mocks --with-expecter
+//go:generate mockery --name Client --dir . --output ../../../mocks --outpkg mocks --with-expecter --filename UserClient.go
 type Client interface {
 	GetUser(ctx context.Context, id int64) (*model.User, error)
 	GetUserByUsername(ctx context.Context, username string) (*model.User, error)
