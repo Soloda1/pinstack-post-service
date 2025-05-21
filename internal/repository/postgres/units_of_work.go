@@ -14,6 +14,7 @@ import (
 	tag_repository_postgres "pinstack-post-service/internal/repository/tag/postgres"
 )
 
+//go:generate mockery --name UnitOfWork --dir . --output ../../../mocks --outpkg mocks --with-expecter --filename UnitsOfWork.go
 type UnitOfWork interface {
 	Begin(ctx context.Context) (Transaction, error)
 }
