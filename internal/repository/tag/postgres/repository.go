@@ -4,13 +4,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgconn"
 	"log/slog"
 	"pinstack-post-service/internal/custom_errors"
 	"pinstack-post-service/internal/logger"
 	"pinstack-post-service/internal/model"
 	"pinstack-post-service/internal/repository/postgres/db"
+
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
 type TagRepository struct {
@@ -91,11 +92,21 @@ func (t *TagRepository) Create(ctx context.Context, name string) (*model.Tag, er
 
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, custom_errors.ErrTagAlreadyExists
+			tags, findErr := t.FindByNames(ctx, []string{name})
+			if findErr != nil || len(tags) == 0 {
+				t.log.Error("Tag exists but could not fetch", slog.String("name", name), slog.String("error", findErr.Error()))
+				return nil, fmt.Errorf("failed to fetch existing tag: %w", findErr)
+			}
+			return tags[0], nil
 		}
 		var pgerr *pgconn.PgError
 		if errors.As(err, &pgerr) && pgerr.Code == "23505" {
-			return nil, custom_errors.ErrTagAlreadyExists
+			tags, findErr := t.FindByNames(ctx, []string{name})
+			if findErr != nil || len(tags) == 0 {
+				t.log.Error("Tag exists but could not fetch", slog.String("name", name), slog.String("error", findErr.Error()))
+				return nil, fmt.Errorf("failed to fetch existing tag: %w", findErr)
+			}
+			return tags[0], nil
 		}
 		t.log.Error("Error creating tag", slog.String("name", name), slog.String("error", err.Error()))
 		return nil, fmt.Errorf("failed to create tag: %w", err)

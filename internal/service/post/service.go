@@ -113,13 +113,25 @@ func (s *PostService) CreatePost(ctx context.Context, post *model.CreatePostDTO)
 	}
 
 	if post.Tags != nil && len(post.Tags) > 0 {
+		existingTags, err := tagRepo.FindByNames(ctx, post.Tags)
+		if err != nil {
+			s.log.Error("Failed to find existing tags", slog.String("error", err.Error()))
+			return nil, custom_errors.ErrTagQueryFailed
+		}
+		existingTagNames := make(map[string]*model.Tag)
+		for _, tag := range existingTags {
+			existingTagNames[tag.Name] = tag
+			createdTags = append(createdTags, tag)
+		}
+		missingTags := make([]string, 0)
 		for _, name := range post.Tags {
+			if _, found := existingTagNames[name]; !found {
+				missingTags = append(missingTags, name)
+			}
+		}
+		for _, name := range missingTags {
 			createdTag, err := tagRepo.Create(ctx, name)
 			if err != nil {
-				if errors.Is(err, custom_errors.ErrTagAlreadyExists) {
-					s.log.Debug("Tag already exists", slog.String("error", err.Error()))
-					return nil, custom_errors.ErrTagAlreadyExists
-				}
 				if errors.Is(err, custom_errors.ErrTagCreateFailed) {
 					s.log.Error("Failed to create tag", slog.String("error", err.Error()))
 					return nil, custom_errors.ErrTagCreateFailed
