@@ -19,6 +19,7 @@ type UnitOfWork interface {
 	Begin(ctx context.Context) (Transaction, error)
 }
 
+//go:generate mockery --name Transaction --dir . --output ../../../mocks --outpkg mocks --with-expecter --filename Transaction.go
 type Transaction interface {
 	PostRepository() post_repository.Repository
 	MediaRepository() media_repository.Repository

@@ -201,7 +201,7 @@ func (p *PostRepository) List(ctx context.Context, filters model.PostFilters) ([
 	}
 
 	if len(filters.TagNames) > 0 {
-		baseQuery += ` JOIN post_tags pt ON p.id = pt.post_id JOIN tags t ON pt.tag_id = t.id`
+		baseQuery += ` JOIN posts_tags pt ON p.id = pt.post_id JOIN tags t ON pt.tag_id = t.id`
 		var tagClauses []string
 		for i, tagName := range filters.TagNames {
 			paramName := fmt.Sprintf("tag_name_%d", i)

@@ -24,7 +24,7 @@ CREATE TABLE IF NOT EXISTS tags (
     name  TEXT   NOT NULL UNIQUE
 );
 
-CREATE TABLE IF NOT EXISTS post_tags (
+CREATE TABLE IF NOT EXISTS posts_tags (
      post_id bigint NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
      tag_id  bigint NOT NULL REFERENCES tags(id)  ON DELETE CASCADE,
      PRIMARY KEY (post_id, tag_id)
@@ -34,8 +34,8 @@ CREATE TABLE IF NOT EXISTS post_tags (
 CREATE INDEX IF NOT EXISTS idx_post_media_post_id_position
     ON post_media(post_id, position);
 
-CREATE INDEX IF NOT EXISTS idx_post_tags_tag_id
-    ON post_tags(tag_id);
+CREATE INDEX IF NOT EXISTS idx_posts_tags_tag_id
+    ON posts_tags(tag_id);
 
 CREATE INDEX IF NOT EXISTS idx_posts_author_id
     ON posts(author_id);
