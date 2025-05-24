@@ -126,11 +126,11 @@ func (p *PostRepository) Update(ctx context.Context, id int64, update *model.Upd
 	setClauses := []string{}
 	args := pgx.NamedArgs{"id": id}
 
-	if update.Title != nil {
+	if update.Title != nil && *update.Title != "" {
 		setClauses = append(setClauses, "title = @title")
 		args["title"] = *update.Title
 	}
-	if update.Content != nil {
+	if update.Content != nil && *update.Content != "" {
 		setClauses = append(setClauses, "content = @content")
 		args["content"] = *update.Content
 	}

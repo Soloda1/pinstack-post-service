@@ -348,7 +348,7 @@ func (s *PostService) UpdatePost(ctx context.Context, userID int64, id int64, po
 		return custom_errors.ErrDatabaseQuery
 	}
 
-	if post.MediaItems != nil {
+	if post.MediaItems != nil && len(post.MediaItems) > 0 {
 		media, err := mediaRepo.GetByPost(ctx, id)
 		if err != nil {
 			if errors.Is(err, custom_errors.ErrMediaNotFound) {

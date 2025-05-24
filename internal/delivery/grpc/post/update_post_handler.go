@@ -34,9 +34,9 @@ func NewUpdatePostHandler(postService PostUpdater, validate *validator.Validate)
 
 type UpdatePostRequestInternal struct {
 	Id      int64                 `validate:"required,gt=0"`
-	Title   *string               `validate:"omitempty,min=3,max=255"`
-	Content *string               `validate:"omitempty,min=10"`
-	Tags    []string              `validate:"omitempty,dive,min=2,max=50"`
+	Title   *string               `validate:"omitempty"`
+	Content *string               `validate:"omitempty"`
+	Tags    []string              `validate:"omitempty,dive"`
 	Media   []*MediaInputInternal `validate:"omitempty,dive"`
 }
 
