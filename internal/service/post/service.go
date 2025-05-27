@@ -12,7 +12,6 @@ import (
 	post_repository "pinstack-post-service/internal/repository/post"
 	"pinstack-post-service/internal/repository/postgres"
 	tag_repository "pinstack-post-service/internal/repository/tag"
-	"sync"
 )
 
 type PostService struct {
@@ -42,23 +41,12 @@ func NewPostService(
 	}
 }
 
-func (s *PostService) CreatePost(ctx context.Context, post *model.CreatePostDTO) (*model.PostDetailed, error) {
-	var author *model.User
-	var userErr error
-	wg := &sync.WaitGroup{}
-	createdTags := make([]*model.Tag, 0, len(post.Tags))
-	createdMedia := make([]*model.PostMedia, 0, len(post.MediaItems))
-
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		author, userErr = s.userClient.GetUser(ctx, post.AuthorID)
-		if userErr != nil {
-			s.log.Error("Failed to get author from user service", slog.String("error", userErr.Error()))
-			userErr = custom_errors.ErrExternalServiceError
-			return
-		}
-	}()
+func (s *PostService) CreatePost(ctx context.Context, post *model.CreatePostDTO) (result *model.PostDetailed, err error) {
+	author, err := s.userClient.GetUser(ctx, post.AuthorID)
+	if err != nil {
+		s.log.Error("Failed to get author from user service", slog.String("error", err.Error()))
+		return nil, custom_errors.ErrExternalServiceError
+	}
 
 	tx, err := s.uow.Begin(ctx)
 	if err != nil {
@@ -74,6 +62,9 @@ func (s *PostService) CreatePost(ctx context.Context, post *model.CreatePostDTO)
 	postRepo := tx.PostRepository()
 	mediaRepo := tx.MediaRepository()
 	tagRepo := tx.TagRepository()
+
+	createdTags := make([]*model.Tag, 0, len(post.Tags))
+	createdMedia := make([]*model.PostMedia, 0, len(post.MediaItems))
 
 	newPost := &model.Post{
 		AuthorID: post.AuthorID,
@@ -171,12 +162,6 @@ func (s *PostService) CreatePost(ctx context.Context, post *model.CreatePostDTO)
 		return nil, custom_errors.ErrDatabaseQuery
 	}
 
-	wg.Wait()
-
-	if userErr != nil {
-		return nil, userErr
-	}
-
 	postDetailed := &model.PostDetailed{
 		Post:   createdPost,
 		Author: author,
@@ -201,6 +186,20 @@ func (s *PostService) GetPostByID(ctx context.Context, id int64) (*model.PostDet
 		}
 	}
 
+	author, err := s.userClient.GetUser(ctx, post.AuthorID)
+	if err != nil {
+		switch {
+		case errors.Is(err, custom_errors.ErrUserNotFound):
+			s.log.Debug("Author not found", slog.Int64("authorID", post.AuthorID))
+			return nil, custom_errors.ErrUserNotFound
+		default:
+			s.log.Error("Failed to get author",
+				slog.String("error", err.Error()),
+				slog.Int64("authorID", post.AuthorID))
+			return nil, custom_errors.ErrExternalServiceError
+		}
+	}
+
 	media, err := s.mediaRepo.GetByPost(ctx, id)
 	if err != nil {
 		switch {
@@ -211,7 +210,7 @@ func (s *PostService) GetPostByID(ctx context.Context, id int64) (*model.PostDet
 			s.log.Error("Failed to get media by post",
 				slog.String("error", err.Error()),
 				slog.Int64("id", id))
-			return nil, custom_errors.ErrDatabaseQuery
+			return nil, custom_errors.ErrMediaQueryFailed
 		}
 	}
 
@@ -225,21 +224,7 @@ func (s *PostService) GetPostByID(ctx context.Context, id int64) (*model.PostDet
 			s.log.Error("Failed to find tags by post",
 				slog.String("error", err.Error()),
 				slog.Int64("id", id))
-			return nil, custom_errors.ErrDatabaseQuery
-		}
-	}
-
-	author, err := s.userClient.GetUser(ctx, post.AuthorID)
-	if err != nil {
-		switch {
-		case errors.Is(err, custom_errors.ErrUserNotFound):
-			s.log.Debug("Author not found", slog.Int64("authorID", post.AuthorID))
-			return nil, custom_errors.ErrUserNotFound
-		default:
-			s.log.Error("Failed to get author",
-				slog.String("error", err.Error()),
-				slog.Int64("authorID", post.AuthorID))
-			return nil, custom_errors.ErrDatabaseQuery
+			return nil, custom_errors.ErrTagQueryFailed
 		}
 	}
 
@@ -308,7 +293,7 @@ func (s *PostService) ListPosts(ctx context.Context, filters *model.PostFilters)
 	return result, nil
 }
 
-func (s *PostService) UpdatePost(ctx context.Context, userID int64, id int64, post *model.UpdatePostDTO) error {
+func (s *PostService) UpdatePost(ctx context.Context, userID int64, id int64, post *model.UpdatePostDTO) (err error) {
 	tx, err := s.uow.Begin(ctx)
 	if err != nil {
 		s.log.Error("Failed to start transaction", slog.String("error", err.Error()))
@@ -429,7 +414,7 @@ func (s *PostService) UpdatePost(ctx context.Context, userID int64, id int64, po
 	return nil
 }
 
-func (s *PostService) DeletePost(ctx context.Context, userID int64, id int64) error {
+func (s *PostService) DeletePost(ctx context.Context, userID int64, id int64) (err error) {
 	tx, err := s.uow.Begin(ctx)
 	if err != nil {
 		s.log.Error("Failed to start transaction", slog.String("error", err.Error()))
