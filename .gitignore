@@ -25,8 +25,6 @@ Thumbs.db
 
 # Go specific
 /vendor/
-/go.sum
-/go.mod
 *.log
 
 # Project specific
