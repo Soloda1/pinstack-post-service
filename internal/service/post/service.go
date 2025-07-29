@@ -3,6 +3,7 @@ package post_service
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	user_client "pinstack-post-service/internal/clients/user"
 	"pinstack-post-service/internal/custom_errors"
@@ -53,9 +54,14 @@ func (s *PostService) CreatePost(ctx context.Context, post *model.CreatePostDTO)
 		s.log.Error("Failed to start transaction", slog.String("error", err.Error()))
 		return nil, custom_errors.ErrDatabaseQuery
 	}
+
+	var txCommitted bool
 	defer func() {
-		if err != nil {
-			_ = tx.Rollback(ctx)
+		if !txCommitted && tx != nil {
+			rollbackErr := tx.Rollback(ctx)
+			if rollbackErr != nil {
+				s.log.Error("Failed to rollback transaction", slog.String("error", rollbackErr.Error()))
+			}
 		}
 	}()
 
@@ -81,7 +87,7 @@ func (s *PostService) CreatePost(ctx context.Context, post *model.CreatePostDTO)
 		return nil, err
 	}
 
-	if post.MediaItems != nil && len(post.MediaItems) > 0 {
+	if len(post.MediaItems) > 0 {
 		media := make([]*model.PostMedia, 0, len(post.MediaItems))
 		for _, m := range post.MediaItems {
 			media = append(media, &model.PostMedia{
@@ -103,7 +109,7 @@ func (s *PostService) CreatePost(ctx context.Context, post *model.CreatePostDTO)
 		}
 	}
 
-	if post.Tags != nil && len(post.Tags) > 0 {
+	if len(post.Tags) > 0 {
 		existingTags, err := tagRepo.FindByNames(ctx, post.Tags)
 		if err != nil {
 			s.log.Error("Failed to find existing tags", slog.String("error", err.Error()))
@@ -120,39 +126,41 @@ func (s *PostService) CreatePost(ctx context.Context, post *model.CreatePostDTO)
 				missingTags = append(missingTags, name)
 			}
 		}
+
 		for _, name := range missingTags {
-			createdTag, err := tagRepo.Create(ctx, name)
-			if err != nil {
-				if errors.Is(err, custom_errors.ErrTagCreateFailed) {
-					s.log.Error("Failed to create tag", slog.String("error", err.Error()))
+			createdTag, tagErr := tagRepo.Create(ctx, name)
+			if tagErr != nil {
+				if errors.Is(tagErr, custom_errors.ErrTagCreateFailed) {
+					s.log.Error("Failed to create tag", slog.String("error", tagErr.Error()))
 					return nil, custom_errors.ErrTagCreateFailed
 				}
-				s.log.Error("Unknown error while creating tag", slog.String("error", err.Error()))
-				return nil, err
+				s.log.Error("Unknown error while creating tag", slog.String("error", tagErr.Error()))
+				// Return error immediately to ensure transaction is rolled back
+				return nil, fmt.Errorf("tag creation failed: %w", tagErr)
 			}
 			createdTags = append(createdTags, createdTag)
 		}
 
-		err = tagRepo.TagPost(ctx, createdPost.ID, post.Tags)
-		if err != nil {
-			if errors.Is(err, custom_errors.ErrPostNotFound) {
-				s.log.Debug("Post not found when adding tags", slog.String("error", err.Error()))
+		tagErr := tagRepo.TagPost(ctx, createdPost.ID, post.Tags)
+		if tagErr != nil {
+			if errors.Is(tagErr, custom_errors.ErrPostNotFound) {
+				s.log.Debug("Post not found when adding tags", slog.String("error", tagErr.Error()))
 				return nil, custom_errors.ErrPostNotFound
 			}
-			if errors.Is(err, custom_errors.ErrTagNotFound) {
-				s.log.Debug("Tag not found when adding to post", slog.String("error", err.Error()))
+			if errors.Is(tagErr, custom_errors.ErrTagNotFound) {
+				s.log.Debug("Tag not found when adding to post", slog.String("error", tagErr.Error()))
 				return nil, custom_errors.ErrTagNotFound
 			}
-			if errors.Is(err, custom_errors.ErrTagVerifyPostFailed) {
-				s.log.Error("Tag verification failed when adding tags to post", slog.String("error", err.Error()))
+			if errors.Is(tagErr, custom_errors.ErrTagVerifyPostFailed) {
+				s.log.Error("Tag verification failed when adding tags to post", slog.String("error", tagErr.Error()))
 				return nil, custom_errors.ErrTagVerifyPostFailed
 			}
-			if errors.Is(err, custom_errors.ErrTagPost) {
-				s.log.Error("Failed to add tags to post", slog.String("error", err.Error()))
+			if errors.Is(tagErr, custom_errors.ErrTagPost) {
+				s.log.Error("Failed to add tags to post", slog.String("error", tagErr.Error()))
 				return nil, custom_errors.ErrTagPost
 			}
-			s.log.Error("Unknown error while adding tags to post", slog.String("error", err.Error()))
-			return nil, err
+			s.log.Error("Unknown error while adding tags to post", slog.String("error", tagErr.Error()))
+			return nil, fmt.Errorf("tag post operation failed: %w", tagErr)
 		}
 	}
 
@@ -161,6 +169,7 @@ func (s *PostService) CreatePost(ctx context.Context, post *model.CreatePostDTO)
 		s.log.Error("Failed to commit transaction", slog.String("error", err.Error()))
 		return nil, custom_errors.ErrDatabaseQuery
 	}
+	txCommitted = true
 
 	postDetailed := &model.PostDetailed{
 		Post:   createdPost,
@@ -200,32 +209,36 @@ func (s *PostService) GetPostByID(ctx context.Context, id int64) (*model.PostDet
 		}
 	}
 
-	media, err := s.mediaRepo.GetByPost(ctx, id)
+	var media []*model.PostMedia
+	mediaResult, err := s.mediaRepo.GetByPost(ctx, id)
 	if err != nil {
-		switch {
-		case errors.Is(err, custom_errors.ErrMediaNotFound):
+		if errors.Is(err, custom_errors.ErrMediaNotFound) {
 			s.log.Debug("Media not found for post", slog.Int64("id", id))
-			return nil, custom_errors.ErrMediaNotFound
-		default:
+			media = []*model.PostMedia{}
+		} else {
 			s.log.Error("Failed to get media by post",
 				slog.String("error", err.Error()),
 				slog.Int64("id", id))
 			return nil, custom_errors.ErrMediaQueryFailed
 		}
+	} else {
+		media = mediaResult
 	}
 
-	tags, err := s.tagRepo.FindByPost(ctx, id)
+	var tags []*model.Tag
+	tagsResult, err := s.tagRepo.FindByPost(ctx, id)
 	if err != nil {
-		switch {
-		case errors.Is(err, custom_errors.ErrTagsNotFound):
+		if errors.Is(err, custom_errors.ErrTagsNotFound) {
 			s.log.Debug("Tags not found for post", slog.Int64("id", id))
-			return nil, custom_errors.ErrTagsNotFound
-		default:
+			tags = []*model.Tag{}
+		} else {
 			s.log.Error("Failed to find tags by post",
 				slog.String("error", err.Error()),
 				slog.Int64("id", id))
 			return nil, custom_errors.ErrTagQueryFailed
 		}
+	} else {
+		tags = tagsResult
 	}
 
 	postDetailed := &model.PostDetailed{
@@ -299,9 +312,14 @@ func (s *PostService) UpdatePost(ctx context.Context, userID int64, id int64, po
 		s.log.Error("Failed to start transaction", slog.String("error", err.Error()))
 		return custom_errors.ErrDatabaseQuery
 	}
+
+	var txCommitted bool
 	defer func() {
-		if err != nil {
-			_ = tx.Rollback(ctx)
+		if !txCommitted && tx != nil {
+			rollbackErr := tx.Rollback(ctx)
+			if rollbackErr != nil {
+				s.log.Error("Failed to rollback transaction", slog.String("error", rollbackErr.Error()))
+			}
 		}
 	}()
 
@@ -333,7 +351,7 @@ func (s *PostService) UpdatePost(ctx context.Context, userID int64, id int64, po
 		return custom_errors.ErrDatabaseQuery
 	}
 
-	if post.MediaItems != nil && len(post.MediaItems) > 0 {
+	if len(post.MediaItems) > 0 {
 		media, err := mediaRepo.GetByPost(ctx, id)
 		if err != nil {
 			if errors.Is(err, custom_errors.ErrMediaNotFound) {
@@ -370,16 +388,16 @@ func (s *PostService) UpdatePost(ctx context.Context, userID int64, id int64, po
 		}
 	}
 
-	if post.Tags != nil && len(post.Tags) > 0 {
+	if len(post.Tags) > 0 {
 		for _, name := range post.Tags {
-			_, err := tagRepo.Create(ctx, name)
-			if err != nil && !errors.Is(err, custom_errors.ErrTagAlreadyExists) {
-				if errors.Is(err, custom_errors.ErrTagCreateFailed) {
-					s.log.Error("Failed to create tag", slog.String("error", err.Error()))
+			_, tagErr := tagRepo.Create(ctx, name)
+			if tagErr != nil && !errors.Is(tagErr, custom_errors.ErrTagAlreadyExists) {
+				if errors.Is(tagErr, custom_errors.ErrTagCreateFailed) {
+					s.log.Error("Failed to create tag", slog.String("error", tagErr.Error()))
 					return custom_errors.ErrTagCreateFailed
 				}
-				s.log.Error("Unknown error creating tag", slog.String("error", err.Error()))
-				return err
+				s.log.Error("Unknown error creating tag", slog.String("error", tagErr.Error()))
+				return fmt.Errorf("tag creation failed during update: %w", tagErr)
 			}
 		}
 		err = tagRepo.ReplacePostTags(ctx, id, post.Tags)
@@ -410,6 +428,7 @@ func (s *PostService) UpdatePost(ctx context.Context, userID int64, id int64, po
 		s.log.Error("Failed to commit transaction", slog.String("error", err.Error()))
 		return custom_errors.ErrDatabaseQuery
 	}
+	txCommitted = true
 
 	return nil
 }
@@ -420,9 +439,14 @@ func (s *PostService) DeletePost(ctx context.Context, userID int64, id int64) (e
 		s.log.Error("Failed to start transaction", slog.String("error", err.Error()))
 		return custom_errors.ErrDatabaseQuery
 	}
+
+	var txCommitted bool
 	defer func() {
-		if err != nil {
-			_ = tx.Rollback(ctx)
+		if !txCommitted && tx != nil {
+			rollbackErr := tx.Rollback(ctx)
+			if rollbackErr != nil {
+				s.log.Error("Failed to rollback transaction", slog.String("error", rollbackErr.Error()))
+			}
 		}
 	}()
 
@@ -510,5 +534,6 @@ func (s *PostService) DeletePost(ctx context.Context, userID int64, id int64) (e
 		s.log.Error("Failed to commit transaction", slog.String("error", err.Error()))
 		return custom_errors.ErrDatabaseQuery
 	}
+	txCommitted = true
 	return nil
 }
