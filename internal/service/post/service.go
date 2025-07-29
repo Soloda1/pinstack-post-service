@@ -395,7 +395,7 @@ func (s *PostService) UpdatePost(ctx context.Context, userID int64, id int64, po
 					return custom_errors.ErrTagCreateFailed
 				}
 				s.log.Error("Unknown error creating tag", slog.String("error", tagErr.Error()))
-				return custom_errors.ErrTagCreateFailed
+				return custom_errors.ErrUnknownTagError
 			}
 		}
 		err = tagRepo.ReplacePostTags(ctx, id, post.Tags)
