@@ -68,7 +68,7 @@ func (h *UpdatePostHandler) UpdatePost(ctx context.Context, req *pb.UpdatePostRe
 		position := m.GetPosition()
 		if position < MinMediaPosition || position > MaxMediaPosition {
 			position = int32(i + 1)
-			if position > MinMediaPosition {
+			if position > MaxMediaPosition {
 				continue
 			}
 		}
