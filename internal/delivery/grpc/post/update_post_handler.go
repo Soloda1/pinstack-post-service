@@ -66,9 +66,9 @@ func (h *UpdatePostHandler) UpdatePost(ctx context.Context, req *pb.UpdatePostRe
 	for i, m := range req.GetMedia() {
 
 		position := m.GetPosition()
-		if position < 1 || position > 9 {
+		if position < MinMediaPosition || position > MaxMediaPosition {
 			position = int32(i + 1)
-			if position > 9 {
+			if position > MinMediaPosition {
 				continue
 			}
 		}

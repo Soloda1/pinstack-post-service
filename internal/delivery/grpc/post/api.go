@@ -11,6 +11,9 @@ import (
 	pb "github.com/soloda1/pinstack-proto-definitions/gen/go/pinstack-proto-definitions/post/v1"
 )
 
+const MaxMediaPosition = 9
+const MinMediaPosition = 1
+
 var validate = validator.New()
 
 type PostGRPCService struct {
