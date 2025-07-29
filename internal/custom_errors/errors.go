@@ -102,6 +102,7 @@ var (
 
 // Ошибки тегов
 var (
+	ErrUnknownTagError     = errors.New("unknown tag error")
 	ErrTagsNotFound        = errors.New("tags not found")
 	ErrTagNotFound         = errors.New("tag not found")
 	ErrInvalidTagName      = errors.New("invalid tag name")

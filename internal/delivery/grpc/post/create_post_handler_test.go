@@ -36,7 +36,7 @@ func TestCreatePostHandler_CreatePost(t *testing.T) {
 				{
 					Url:      "https://example.com/image.jpg",
 					Type:     "image",
-					Position: 0,
+					Position: 1,
 				},
 			},
 		}
@@ -59,7 +59,7 @@ func TestCreatePostHandler_CreatePost(t *testing.T) {
 					PostID:    1,
 					URL:       "https://example.com/image.jpg",
 					Type:      "image",
-					Position:  0,
+					Position:  1,
 					CreatedAt: pgtype.Timestamptz{Time: createdAt, Valid: true},
 				},
 			},
@@ -173,7 +173,7 @@ func TestCreatePostHandler_CreatePost(t *testing.T) {
 				{
 					Url:      "invalid-url",
 					Type:     "image",
-					Position: 0,
+					Position: 1,
 				},
 			},
 		}
@@ -245,12 +245,12 @@ func TestCreatePostHandler_CreatePost(t *testing.T) {
 				{
 					Url:      "https://example.com/image1.jpg",
 					Type:     "image",
-					Position: 0,
+					Position: 1,
 				},
 				{
 					Url:      "https://example.com/image2.jpg",
 					Type:     "image",
-					Position: 1,
+					Position: 2,
 				},
 			},
 		}
@@ -270,7 +270,7 @@ func TestCreatePostHandler_CreatePost(t *testing.T) {
 					PostID:    42,
 					URL:       "https://example.com/image1.jpg",
 					Type:      "image",
-					Position:  0,
+					Position:  1,
 					CreatedAt: pgtype.Timestamptz{Time: createdAt, Valid: true},
 				},
 				{
@@ -278,7 +278,7 @@ func TestCreatePostHandler_CreatePost(t *testing.T) {
 					PostID:    42,
 					URL:       "https://example.com/image2.jpg",
 					Type:      "image",
-					Position:  1,
+					Position:  2,
 					CreatedAt: pgtype.Timestamptz{Time: createdAt, Valid: true},
 				},
 			},

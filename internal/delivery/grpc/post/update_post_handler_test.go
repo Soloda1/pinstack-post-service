@@ -44,7 +44,7 @@ func TestUpdatePostHandler_UpdatePost(t *testing.T) {
 				{
 					Url:      "https://example.com/new-image.jpg",
 					Type:     "image",
-					Position: 0,
+					Position: 1,
 				},
 			},
 		}
@@ -75,7 +75,7 @@ func TestUpdatePostHandler_UpdatePost(t *testing.T) {
 					PostID:    postID,
 					URL:       "https://example.com/new-image.jpg",
 					Type:      "image",
-					Position:  0,
+					Position:  1,
 					CreatedAt: pgtype.Timestamptz{Time: updatedAt, Valid: true},
 				},
 			},
@@ -209,7 +209,7 @@ func TestUpdatePostHandler_UpdatePost(t *testing.T) {
 				{
 					Url:      "invalid-url",
 					Type:     "image",
-					Position: 0,
+					Position: 1,
 				},
 			},
 		}
