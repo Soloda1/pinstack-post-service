@@ -51,7 +51,7 @@ func TestGetPostHandler_GetPost(t *testing.T) {
 					PostID:    postID,
 					URL:       "https://example.com/image1.jpg",
 					Type:      "image",
-					Position:  0,
+					Position:  1,
 					CreatedAt: pgtype.Timestamptz{Time: createdAt, Valid: true},
 				},
 				{
