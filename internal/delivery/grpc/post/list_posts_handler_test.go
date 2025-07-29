@@ -76,7 +76,7 @@ func TestListPostsHandler_ListPosts(t *testing.T) {
 						PostID:    2,
 						URL:       "https://example.com/image2.jpg",
 						Type:      "image",
-						Position:  2, // Updated from 0 to 1 to meet validation requirements
+						Position:  2,
 						CreatedAt: pgtype.Timestamptz{Time: createdAt, Valid: true},
 					},
 				},
