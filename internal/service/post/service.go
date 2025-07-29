@@ -3,7 +3,6 @@ package post_service
 import (
 	"context"
 	"errors"
-	"fmt"
 	"log/slog"
 	user_client "pinstack-post-service/internal/clients/user"
 	"pinstack-post-service/internal/custom_errors"
@@ -135,8 +134,7 @@ func (s *PostService) CreatePost(ctx context.Context, post *model.CreatePostDTO)
 					return nil, custom_errors.ErrTagCreateFailed
 				}
 				s.log.Error("Unknown error while creating tag", slog.String("error", tagErr.Error()))
-				// Return error immediately to ensure transaction is rolled back
-				return nil, fmt.Errorf("tag creation failed: %w", tagErr)
+				return nil, custom_errors.ErrUnknownTagError
 			}
 			createdTags = append(createdTags, createdTag)
 		}
@@ -160,7 +158,7 @@ func (s *PostService) CreatePost(ctx context.Context, post *model.CreatePostDTO)
 				return nil, custom_errors.ErrTagPost
 			}
 			s.log.Error("Unknown error while adding tags to post", slog.String("error", tagErr.Error()))
-			return nil, fmt.Errorf("tag post operation failed: %w", tagErr)
+			return nil, custom_errors.ErrUnknownTagError
 		}
 	}
 
@@ -397,7 +395,7 @@ func (s *PostService) UpdatePost(ctx context.Context, userID int64, id int64, po
 					return custom_errors.ErrTagCreateFailed
 				}
 				s.log.Error("Unknown error creating tag", slog.String("error", tagErr.Error()))
-				return fmt.Errorf("tag creation failed during update: %w", tagErr)
+				return custom_errors.ErrTagCreateFailed
 			}
 		}
 		err = tagRepo.ReplacePostTags(ctx, id, post.Tags)
