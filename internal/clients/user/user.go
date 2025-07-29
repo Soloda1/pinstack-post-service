@@ -25,7 +25,7 @@ func NewUserClient(conn *grpc.ClientConn, log *logger.Logger) *UserClient {
 	}
 }
 
-func (u UserClient) GetUser(ctx context.Context, id int64) (*model.User, error) {
+func (u *UserClient) GetUser(ctx context.Context, id int64) (*model.User, error) {
 	u.log.Info("Getting user by ID", slog.Int64("id", id))
 	resp, err := u.client.GetUser(ctx, &pb.GetUserRequest{Id: id})
 	if err != nil {
@@ -41,7 +41,7 @@ func (u UserClient) GetUser(ctx context.Context, id int64) (*model.User, error) 
 	return model.UserFromProto(resp), nil
 }
 
-func (u UserClient) GetUserByUsername(ctx context.Context, username string) (*model.User, error) {
+func (u *UserClient) GetUserByUsername(ctx context.Context, username string) (*model.User, error) {
 	u.log.Info("Getting user by username", slog.String("username", username))
 	resp, err := u.client.GetUserByUsername(ctx, &pb.GetUserByUsernameRequest{Username: username})
 	if err != nil {
@@ -57,7 +57,7 @@ func (u UserClient) GetUserByUsername(ctx context.Context, username string) (*mo
 	return model.UserFromProto(resp), nil
 }
 
-func (u UserClient) GetUserByEmail(ctx context.Context, email string) (*model.User, error) {
+func (u *UserClient) GetUserByEmail(ctx context.Context, email string) (*model.User, error) {
 	u.log.Info("Getting user by email", slog.String("email", email))
 	resp, err := u.client.GetUserByEmail(ctx, &pb.GetUserByEmailRequest{Email: email})
 	if err != nil {
