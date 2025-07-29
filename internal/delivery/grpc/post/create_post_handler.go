@@ -35,13 +35,13 @@ type CreatePostRequestInternal struct {
 	Title    string                `validate:"required,min=3,max=255"`
 	Content  string                `validate:"required,min=10"`
 	Tags     []string              `validate:"omitempty,dive,min=2,max=50"`
-	Media    []*MediaInputInternal `validate:"omitempty,dive"`
+	Media    []*MediaInputInternal `validate:"omitempty,max=9,dive"`
 }
 
 type MediaInputInternal struct {
 	URL      string `validate:"required,url"`
-	Type     string `validate:"required"`
-	Position int32  `validate:"gte=0"`
+	Type     string `validate:"required,oneof=image video"`
+	Position int32  `validate:"gte=1,lte=9"`
 }
 
 func (h *CreatePostHandler) CreatePost(ctx context.Context, req *pb.CreatePostRequest) (*pb.Post, error) {
@@ -68,10 +68,18 @@ func (h *CreatePostHandler) CreatePost(ctx context.Context, req *pb.CreatePostRe
 
 	dtoMediaItems := make([]*model.PostMediaInput, len(req.GetMedia()))
 	for i, m := range req.GetMedia() {
+
+		position := m.GetPosition()
+		if position < 1 || position > 9 {
+			position = int32(i + 1)
+			if position > 9 {
+				continue
+			}
+		}
 		dtoMediaItems[i] = &model.PostMediaInput{
 			URL:      m.GetUrl(),
 			Type:     model.MediaType(m.GetType()),
-			Position: m.GetPosition(),
+			Position: position,
 		}
 	}
 

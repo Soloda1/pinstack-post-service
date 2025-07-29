@@ -62,13 +62,22 @@ func (h *UpdatePostHandler) UpdatePost(ctx context.Context, req *pb.UpdatePostRe
 		return nil, status.Errorf(codes.InvalidArgument, "invalid request: %v", err)
 	}
 
-	dtoMediaItems := make([]*model.PostMediaInput, len(req.GetMedia()))
+	dtoMediaItems := make([]*model.PostMediaInput, 0, len(req.GetMedia()))
 	for i, m := range req.GetMedia() {
-		dtoMediaItems[i] = &model.PostMediaInput{
+
+		position := m.GetPosition()
+		if position < 1 || position > 9 {
+			position = int32(i + 1)
+			if position > 9 {
+				continue
+			}
+		}
+
+		dtoMediaItems = append(dtoMediaItems, &model.PostMediaInput{
 			URL:      m.GetUrl(),
 			Type:     model.MediaType(m.GetType()),
-			Position: m.GetPosition(),
-		}
+			Position: position,
+		})
 	}
 
 	updateDTO := &model.UpdatePostDTO{
