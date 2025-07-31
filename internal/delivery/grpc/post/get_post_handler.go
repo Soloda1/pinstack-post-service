@@ -2,6 +2,7 @@ package post_grpc
 
 import (
 	"context"
+	"errors"
 
 	"github.com/go-playground/validator/v10"
 	pb "github.com/soloda1/pinstack-proto-definitions/gen/go/pinstack-proto-definitions/post/v1"
@@ -45,10 +46,10 @@ func (h *GetPostHandler) GetPost(ctx context.Context, req *pb.GetPostRequest) (*
 
 	retrievedPostModel, err := h.postService.GetPostByID(ctx, req.GetId())
 	if err != nil {
-		switch err {
-		case custom_errors.ErrPostNotFound:
+		switch {
+		case errors.Is(err, custom_errors.ErrPostNotFound):
 			return nil, status.Errorf(codes.NotFound, "post not found: %v", err)
-		case custom_errors.ErrPostValidation: // Assuming validation might also occur on retrieval path
+		case errors.Is(err, custom_errors.ErrPostValidation):
 			return nil, status.Errorf(codes.InvalidArgument, "post retrieval validation failed: %v", err)
 		default:
 			return nil, status.Errorf(codes.Internal, "failed to get post: %v", err)
