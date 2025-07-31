@@ -225,14 +225,14 @@ func (p *PostRepository) List(ctx context.Context, filters model.PostFilters) ([
 		p.log.Debug("Adding author filter", slog.Int64("author_id", *filters.AuthorID))
 	}
 	if filters.CreatedAfter != nil {
-		whereClauses = append(whereClauses, "p.created_at >= @created_after")
+		whereClauses = append(whereClauses, "p.created_at > @created_after")
 		args["created_after"] = *filters.CreatedAfter
-		p.log.Debug("Adding created_after filter", slog.Any("created_after", filters.CreatedAfter))
+		p.log.Debug("Adding created_after filter", slog.Any("created_after", filters.CreatedAfter), slog.String("operator", ">"))
 	}
 	if filters.CreatedBefore != nil {
-		whereClauses = append(whereClauses, "p.created_at <= @created_before")
+		whereClauses = append(whereClauses, "p.created_at < @created_before")
 		args["created_before"] = *filters.CreatedBefore
-		p.log.Debug("Adding created_before filter", slog.Any("created_before", filters.CreatedBefore))
+		p.log.Debug("Adding created_before filter", slog.Any("created_before", filters.CreatedBefore), slog.String("operator", "<"))
 	}
 
 	if len(filters.TagNames) > 0 {
