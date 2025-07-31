@@ -27,6 +27,8 @@ func NewPostRepository(db db.PgDB, log *logger.Logger) *PostRepository {
 }
 
 func (p *PostRepository) Create(ctx context.Context, post *model.Post) (*model.Post, error) {
+	p.log.Debug("Creating new post", slog.Int64("author_id", post.AuthorID), slog.String("title", post.Title))
+
 	now := pgtype.Timestamptz{Time: time.Now(), Valid: true}
 
 	args := pgx.NamedArgs{
@@ -57,10 +59,13 @@ func (p *PostRepository) Create(ctx context.Context, post *model.Post) (*model.P
 		return nil, custom_errors.ErrDatabaseQuery
 	}
 
+	p.log.Debug("Successfully created post", slog.Int64("id", createdPost.ID), slog.Int64("author_id", createdPost.AuthorID))
 	return &createdPost, nil
 }
 
 func (p *PostRepository) GetByID(ctx context.Context, id int64) (*model.Post, error) {
+	p.log.Debug("Getting post by ID", slog.Int64("id", id))
+
 	args := pgx.NamedArgs{"id": id}
 	query := `SELECT id, author_id, title, content, created_at, updated_at
 				FROM posts WHERE id = @id`
@@ -82,10 +87,13 @@ func (p *PostRepository) GetByID(ctx context.Context, id int64) (*model.Post, er
 		p.log.Error("Error getting post by id", slog.Int64("id", id), slog.String("error", err.Error()))
 		return nil, custom_errors.ErrDatabaseQuery
 	}
+	p.log.Debug("Successfully retrieved post by ID", slog.Int64("id", post.ID), slog.Int64("author_id", post.AuthorID))
 	return post, nil
 }
 
 func (p *PostRepository) GetByAuthor(ctx context.Context, authorID int64) ([]*model.Post, error) {
+	p.log.Debug("Getting posts by author", slog.Int64("author_id", authorID))
+
 	args := pgx.NamedArgs{"author_id": authorID}
 	query := `SELECT id, author_id, title, content, created_at, updated_at
 				FROM posts WHERE author_id = @author_id ORDER BY created_at DESC`
@@ -120,20 +128,28 @@ func (p *PostRepository) GetByAuthor(ctx context.Context, authorID int64) ([]*mo
 		return nil, custom_errors.ErrDatabaseQuery
 	}
 
+	p.log.Debug("Successfully retrieved posts by author", slog.Int64("author_id", authorID), slog.Int("count", len(posts)))
 	return posts, nil
 }
 
 func (p *PostRepository) Update(ctx context.Context, id int64, update *model.UpdatePostDTO) (*model.Post, error) {
+	p.log.Debug("Updating post", slog.Int64("id", id), slog.Any("update_fields", map[string]bool{
+		"title":   update.Title != nil,
+		"content": update.Content != nil,
+	}))
+
 	setClauses := []string{}
 	args := pgx.NamedArgs{"id": id}
 
 	if update.Title != nil && *update.Title != "" {
 		setClauses = append(setClauses, "title = @title")
 		args["title"] = *update.Title
+		p.log.Debug("Updating post title", slog.Int64("id", id), slog.String("new_title", *update.Title))
 	}
 	if update.Content != nil && *update.Content != "" {
 		setClauses = append(setClauses, "content = @content")
 		args["content"] = *update.Content
+		p.log.Debug("Updating post content", slog.Int64("id", id))
 	}
 
 	updatedAt := pgtype.Timestamptz{Time: time.Now(), Valid: true}
@@ -141,9 +157,11 @@ func (p *PostRepository) Update(ctx context.Context, id int64, update *model.Upd
 	args["updated_at"] = updatedAt
 
 	if len(setClauses) == 0 {
+		p.log.Debug("No fields to update", slog.Int64("id", id))
 		return nil, custom_errors.ErrNoUpdateRows
 	}
 
+	p.log.Debug("Building update query", slog.Int64("id", id), slog.Int("set_clauses_count", len(setClauses)))
 	query := "UPDATE posts SET " + strings.Join(setClauses, ", ") + " WHERE id = @id RETURNING id, author_id, title, content, created_at, updated_at"
 
 	var updatedPost model.Post
@@ -165,10 +183,13 @@ func (p *PostRepository) Update(ctx context.Context, id int64, update *model.Upd
 		return nil, custom_errors.ErrDatabaseQuery
 	}
 
+	p.log.Debug("Successfully updated post", slog.Int64("id", updatedPost.ID), slog.Int64("author_id", updatedPost.AuthorID),
+		slog.Time("updated_at", updatedPost.UpdatedAt.Time))
 	return &updatedPost, nil
 }
 
 func (p *PostRepository) Delete(ctx context.Context, id int64) error {
+	p.log.Debug("Deleting post", slog.Int64("id", id))
 	args := pgx.NamedArgs{"id": id}
 	query := `DELETE FROM posts WHERE id = @id`
 	result, err := p.db.Exec(ctx, query, args)
@@ -177,37 +198,52 @@ func (p *PostRepository) Delete(ctx context.Context, id int64) error {
 		return custom_errors.ErrDatabaseQuery
 	}
 	if result.RowsAffected() == 0 {
+		p.log.Debug("Post not found during deletion", slog.Int64("id", id))
 		return custom_errors.ErrPostNotFound
 	}
+	p.log.Debug("Successfully deleted post", slog.Int64("id", id))
 	return nil
 }
 
 func (p *PostRepository) List(ctx context.Context, filters model.PostFilters) ([]*model.Post, int, error) {
+	p.log.Debug("Listing posts with filters",
+		slog.Any("author_id", filters.AuthorID),
+		slog.Any("created_after", filters.CreatedAfter),
+		slog.Any("created_before", filters.CreatedBefore),
+		slog.Any("tag_names", filters.TagNames),
+		slog.Any("limit", filters.Limit),
+		slog.Any("offset", filters.Offset))
+
 	args := pgx.NamedArgs{}
-	baseQuery := `SELECT p.id, p.author_id, p.title, p.content, p.created_at, p.updated_at FROM posts p`
+	baseQuery := `SELECT DISTINCT p.id, p.author_id, p.title, p.content, p.created_at, p.updated_at FROM posts p`
 
 	whereClauses := []string{}
 
 	if filters.AuthorID != nil {
 		whereClauses = append(whereClauses, "p.author_id = @author_id")
 		args["author_id"] = *filters.AuthorID
+		p.log.Debug("Adding author filter", slog.Int64("author_id", *filters.AuthorID))
 	}
 	if filters.CreatedAfter != nil {
 		whereClauses = append(whereClauses, "p.created_at >= @created_after")
 		args["created_after"] = *filters.CreatedAfter
+		p.log.Debug("Adding created_after filter", slog.Any("created_after", filters.CreatedAfter))
 	}
 	if filters.CreatedBefore != nil {
 		whereClauses = append(whereClauses, "p.created_at <= @created_before")
 		args["created_before"] = *filters.CreatedBefore
+		p.log.Debug("Adding created_before filter", slog.Any("created_before", filters.CreatedBefore))
 	}
 
 	if len(filters.TagNames) > 0 {
+		p.log.Debug("Adding tags filter", slog.Any("tag_names", filters.TagNames))
 		baseQuery += ` JOIN posts_tags pt ON p.id = pt.post_id JOIN tags t ON pt.tag_id = t.id`
 		var tagClauses []string
 		for i, tagName := range filters.TagNames {
 			paramName := fmt.Sprintf("tag_name_%d", i)
 			tagClauses = append(tagClauses, fmt.Sprintf("t.name ILIKE @%s", paramName))
 			args[paramName] = tagName
+			p.log.Debug("Adding tag filter", slog.String("tag_name", tagName), slog.String("param_name", paramName))
 		}
 		whereClauses = append(whereClauses, "("+strings.Join(tagClauses, " OR ")+")")
 	}
@@ -215,19 +251,24 @@ func (p *PostRepository) List(ctx context.Context, filters model.PostFilters) ([
 	if len(whereClauses) > 0 {
 		condition := " WHERE " + strings.Join(whereClauses, " AND ")
 		baseQuery += condition
+		p.log.Debug("Added WHERE conditions", slog.Int("conditions_count", len(whereClauses)))
 	}
 
 	baseQuery += " ORDER BY p.created_at DESC"
+	p.log.Debug("Query before pagination", slog.String("query", baseQuery))
 
 	if filters.Limit != nil {
 		baseQuery += " LIMIT @limit"
 		args["limit"] = *filters.Limit
+		p.log.Debug("Adding pagination limit", slog.Int("limit", *filters.Limit))
 	}
 	if filters.Offset != nil {
 		baseQuery += " OFFSET @offset"
 		args["offset"] = *filters.Offset
+		p.log.Debug("Adding pagination offset", slog.Int("offset", *filters.Offset))
 	}
 
+	p.log.Debug("Executing list query", slog.String("query", baseQuery), slog.Any("args_keys", args))
 	rows, err := p.db.Query(ctx, baseQuery, args)
 	if err != nil {
 		p.log.Error("Error listing posts", slog.String("error", err.Error()))
@@ -251,6 +292,7 @@ func (p *PostRepository) List(ctx context.Context, filters model.PostFilters) ([
 			return nil, 0, custom_errors.ErrDatabaseScan
 		}
 		posts = append(posts, &post)
+		p.log.Debug("Scanned post in List", slog.Int64("post_id", post.ID), slog.Int64("author_id", post.AuthorID))
 	}
 
 	if err = rows.Err(); err != nil {
@@ -258,7 +300,10 @@ func (p *PostRepository) List(ctx context.Context, filters model.PostFilters) ([
 		return nil, 0, custom_errors.ErrDatabaseQuery
 	}
 
-	countQuery := "SELECT COUNT(*) FROM posts p"
+	p.log.Debug("Retrieved posts in List", slog.Int("retrieved_posts_count", len(posts)))
+
+	p.log.Debug("Building count query")
+	countQuery := "SELECT COUNT(DISTINCT p.id) FROM posts p"
 
 	if len(filters.TagNames) > 0 {
 		countQuery += " JOIN posts_tags pt ON p.id = pt.post_id JOIN tags t ON pt.tag_id = t.id"
@@ -268,12 +313,22 @@ func (p *PostRepository) List(ctx context.Context, filters model.PostFilters) ([
 		countQuery += " WHERE " + strings.Join(whereClauses, " AND ")
 	}
 
+	// Create a copy of args without LIMIT and OFFSET for the count query
+	countArgs := make(pgx.NamedArgs)
+	for k, v := range args {
+		if k != "limit" && k != "offset" {
+			countArgs[k] = v
+		}
+	}
+
 	var total int
-	err = p.db.QueryRow(ctx, countQuery, args).Scan(&total)
+	p.log.Debug("Executing count query", slog.String("count_query", countQuery), slog.Any("args_keys", countArgs))
+	err = p.db.QueryRow(ctx, countQuery, countArgs).Scan(&total)
 	if err != nil {
 		p.log.Error("Error counting posts", slog.String("error", err.Error()))
 		return nil, 0, custom_errors.ErrDatabaseQuery
 	}
+	p.log.Debug("Count query result", slog.Int("total", total))
 
 	return posts, total, nil
 }
