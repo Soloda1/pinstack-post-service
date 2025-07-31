@@ -464,7 +464,7 @@ func TestPostService_ListPosts(t *testing.T) {
 					{ID: 1, AuthorID: 1, Title: "Post 1"},
 					{ID: 2, AuthorID: 2, Title: "Post 2"},
 				}
-				postRepo.On("List", mock.Anything, filters).Return(posts, nil)
+				postRepo.On("List", mock.Anything, filters).Return(posts, len(posts), nil)
 
 				mediaRepo.On("GetByPost", mock.Anything, int64(1)).Return([]*model.PostMedia{{ID: 1, PostID: 1, URL: "url1", Type: "image"}}, nil)
 				tagRepo.On("FindByPost", mock.Anything, int64(1)).Return([]*model.Tag{{ID: 1, Name: "tag1"}}, nil)
@@ -498,7 +498,7 @@ func TestPostService_ListPosts(t *testing.T) {
 			name: "Error listing posts from repo",
 			mocks: func(postRepo *post_repository_mock.Repository, mediaRepo *media_repository_mock.Repository, tagRepo *tag_repository_mock.Repository, userClient *user_client_mock.Client) {
 				filters := model.PostFilters{Limit: func(i int) *int { return &i }(10), Offset: func(i int) *int { return &i }(0)}
-				postRepo.On("List", mock.Anything, filters).Return(nil, errors.New("db error"))
+				postRepo.On("List", mock.Anything, filters).Return(nil, 0, errors.New("db error"))
 			},
 			args: args{
 				ctx:     context.Background(),
@@ -513,7 +513,7 @@ func TestPostService_ListPosts(t *testing.T) {
 			mocks: func(postRepo *post_repository_mock.Repository, mediaRepo *media_repository_mock.Repository, tagRepo *tag_repository_mock.Repository, userClient *user_client_mock.Client) {
 				filters := model.PostFilters{Limit: func(i int) *int { return &i }(10), Offset: func(i int) *int { return &i }(0)}
 				posts := []*model.Post{{ID: 1, AuthorID: 1, Title: "Post 1"}}
-				postRepo.On("List", mock.Anything, filters).Return(posts, nil)
+				postRepo.On("List", mock.Anything, filters).Return(posts, len(posts), nil)
 				mediaRepo.On("GetByPost", mock.Anything, int64(1)).Return(nil, errors.New("db error"))
 			},
 			args: args{
@@ -529,7 +529,7 @@ func TestPostService_ListPosts(t *testing.T) {
 			mocks: func(postRepo *post_repository_mock.Repository, mediaRepo *media_repository_mock.Repository, tagRepo *tag_repository_mock.Repository, userClient *user_client_mock.Client) {
 				filters := model.PostFilters{Limit: func(i int) *int { return &i }(10), Offset: func(i int) *int { return &i }(0)}
 				posts := []*model.Post{{ID: 1, AuthorID: 1, Title: "Post 1"}}
-				postRepo.On("List", mock.Anything, filters).Return(posts, nil)
+				postRepo.On("List", mock.Anything, filters).Return(posts, len(posts), nil)
 				mediaRepo.On("GetByPost", mock.Anything, int64(1)).Return(nil, custom_errors.ErrMediaNotFound)
 				tagRepo.On("FindByPost", mock.Anything, int64(1)).Return([]*model.Tag{{ID: 1, Name: "tag1"}}, nil)
 				userClient.On("GetUser", mock.Anything, int64(1)).Return(&model.User{ID: 1, Username: "user1"}, nil)
@@ -553,7 +553,7 @@ func TestPostService_ListPosts(t *testing.T) {
 			mocks: func(postRepo *post_repository_mock.Repository, mediaRepo *media_repository_mock.Repository, tagRepo *tag_repository_mock.Repository, userClient *user_client_mock.Client) {
 				filters := model.PostFilters{Limit: func(i int) *int { return &i }(10), Offset: func(i int) *int { return &i }(0)}
 				posts := []*model.Post{{ID: 1, AuthorID: 1, Title: "Post 1"}}
-				postRepo.On("List", mock.Anything, filters).Return(posts, nil)
+				postRepo.On("List", mock.Anything, filters).Return(posts, len(posts), nil)
 				mediaRepo.On("GetByPost", mock.Anything, int64(1)).Return([]*model.PostMedia{}, nil)
 				tagRepo.On("FindByPost", mock.Anything, int64(1)).Return(nil, errors.New("db error"))
 			},
@@ -570,7 +570,7 @@ func TestPostService_ListPosts(t *testing.T) {
 			mocks: func(postRepo *post_repository_mock.Repository, mediaRepo *media_repository_mock.Repository, tagRepo *tag_repository_mock.Repository, userClient *user_client_mock.Client) {
 				filters := model.PostFilters{Limit: func(i int) *int { return &i }(10), Offset: func(i int) *int { return &i }(0)}
 				posts := []*model.Post{{ID: 1, AuthorID: 1, Title: "Post 1"}}
-				postRepo.On("List", mock.Anything, filters).Return(posts, nil)
+				postRepo.On("List", mock.Anything, filters).Return(posts, len(posts), nil)
 				mediaRepo.On("GetByPost", mock.Anything, int64(1)).Return([]*model.PostMedia{}, nil)
 				tagRepo.On("FindByPost", mock.Anything, int64(1)).Return(nil, custom_errors.ErrTagsNotFound)
 				userClient.On("GetUser", mock.Anything, int64(1)).Return(&model.User{ID: 1, Username: "user1"}, nil)
@@ -594,7 +594,7 @@ func TestPostService_ListPosts(t *testing.T) {
 			mocks: func(postRepo *post_repository_mock.Repository, mediaRepo *media_repository_mock.Repository, tagRepo *tag_repository_mock.Repository, userClient *user_client_mock.Client) {
 				filters := model.PostFilters{Limit: func(i int) *int { return &i }(10), Offset: func(i int) *int { return &i }(0)}
 				posts := []*model.Post{{ID: 1, AuthorID: 1, Title: "Post 1"}}
-				postRepo.On("List", mock.Anything, filters).Return(posts, nil)
+				postRepo.On("List", mock.Anything, filters).Return(posts, len(posts), nil)
 				mediaRepo.On("GetByPost", mock.Anything, int64(1)).Return([]*model.PostMedia{}, nil)
 				tagRepo.On("FindByPost", mock.Anything, int64(1)).Return([]*model.Tag{}, nil)
 				userClient.On("GetUser", mock.Anything, int64(1)).Return(nil, errors.New("user service error"))
@@ -612,7 +612,7 @@ func TestPostService_ListPosts(t *testing.T) {
 			mocks: func(postRepo *post_repository_mock.Repository, mediaRepo *media_repository_mock.Repository, tagRepo *tag_repository_mock.Repository, userClient *user_client_mock.Client) {
 				filters := model.PostFilters{Limit: func(i int) *int { return &i }(10), Offset: func(i int) *int { return &i }(0)}
 				posts := []*model.Post{{ID: 1, AuthorID: 1, Title: "Post 1"}}
-				postRepo.On("List", mock.Anything, filters).Return(posts, nil)
+				postRepo.On("List", mock.Anything, filters).Return(posts, len(posts), nil)
 				mediaRepo.On("GetByPost", mock.Anything, int64(1)).Return([]*model.PostMedia{}, nil)
 				tagRepo.On("FindByPost", mock.Anything, int64(1)).Return([]*model.Tag{}, nil)
 				userClient.On("GetUser", mock.Anything, int64(1)).Return(nil, custom_errors.ErrUserNotFound)
@@ -639,15 +639,18 @@ func TestPostService_ListPosts(t *testing.T) {
 			}
 
 			s := NewPostService(postRepo, tagRepo, mediaRepo, uow, log, userClient)
-			got, err := s.ListPosts(tt.args.ctx, tt.args.filters)
+			got, total, err := s.ListPosts(tt.args.ctx, tt.args.filters)
 
 			if tt.wantErr {
 				assert.Error(t, err)
 				if tt.wantErrType != nil {
 					assert.True(t, errors.Is(err, tt.wantErrType), "expected error type %T, got %T", tt.wantErrType, err)
 				}
+				assert.Nil(t, got)
+				assert.Zero(t, total)
 			} else {
 				assert.NoError(t, err)
+				assert.NotNil(t, got)
 			}
 			assert.Equal(t, tt.want, got)
 
@@ -1063,7 +1066,7 @@ func TestPostService_DeletePost(t *testing.T) {
 				postID: 1,
 			},
 			wantErr:     true,
-			wantErrType: custom_errors.ErrInvalidInput,
+			wantErrType: custom_errors.ErrForbidden,
 		},
 		{
 			name: "Error getting media for post (not ErrMediaNotFound)",

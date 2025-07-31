@@ -3,6 +3,14 @@ package post_grpc_test
 import (
 	"context"
 	"errors"
+	"pinstack-post-service/internal/custom_errors"
+	post_grpc "pinstack-post-service/internal/delivery/grpc/post"
+	"pinstack-post-service/internal/logger"
+	"pinstack-post-service/internal/model"
+	mockpost "pinstack-post-service/mocks/post"
+	"testing"
+	"time"
+
 	"github.com/go-playground/validator/v10"
 	"github.com/jackc/pgx/v5/pgtype"
 	pb "github.com/soloda1/pinstack-proto-definitions/gen/go/pinstack-proto-definitions/post/v1"
@@ -12,20 +20,15 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/timestamppb"
-	"pinstack-post-service/internal/custom_errors"
-	post_grpc "pinstack-post-service/internal/delivery/grpc/post"
-	"pinstack-post-service/internal/model"
-	mockpost "pinstack-post-service/mocks/post"
-	"testing"
-	"time"
 )
 
 func TestGetPostHandler_GetPost(t *testing.T) {
 	validate := validator.New()
+	testLogger := logger.New("test")
 
 	t.Run("Success", func(t *testing.T) {
 		mockPostService := new(mockpost.Service)
-		handler := post_grpc.NewGetPostHandler(mockPostService, validate)
+		handler := post_grpc.NewGetPostHandler(mockPostService, validate, testLogger)
 
 		postID := int64(123)
 		req := &pb.GetPostRequest{
@@ -103,7 +106,7 @@ func TestGetPostHandler_GetPost(t *testing.T) {
 
 	t.Run("SuccessWithNullableFields", func(t *testing.T) {
 		mockPostService := new(mockpost.Service)
-		handler := post_grpc.NewGetPostHandler(mockPostService, validate)
+		handler := post_grpc.NewGetPostHandler(mockPostService, validate, testLogger)
 
 		postID := int64(123)
 		req := &pb.GetPostRequest{
@@ -143,7 +146,7 @@ func TestGetPostHandler_GetPost(t *testing.T) {
 
 	t.Run("ValidationError", func(t *testing.T) {
 		mockPostService := new(mockpost.Service)
-		handler := post_grpc.NewGetPostHandler(mockPostService, validate)
+		handler := post_grpc.NewGetPostHandler(mockPostService, validate, testLogger)
 
 		req := &pb.GetPostRequest{
 			Id: 0,
@@ -157,14 +160,14 @@ func TestGetPostHandler_GetPost(t *testing.T) {
 		statusErr, ok := status.FromError(err)
 		assert.True(t, ok)
 		assert.Equal(t, codes.InvalidArgument, statusErr.Code())
-		assert.Contains(t, statusErr.Message(), "invalid request")
+		assert.Equal(t, "invalid request", statusErr.Message())
 
 		mockPostService.AssertNotCalled(t, "GetPostByID")
 	})
 
 	t.Run("PostNotFound", func(t *testing.T) {
 		mockPostService := new(mockpost.Service)
-		handler := post_grpc.NewGetPostHandler(mockPostService, validate)
+		handler := post_grpc.NewGetPostHandler(mockPostService, validate, testLogger)
 
 		postID := int64(999)
 		req := &pb.GetPostRequest{
@@ -181,14 +184,14 @@ func TestGetPostHandler_GetPost(t *testing.T) {
 		statusErr, ok := status.FromError(err)
 		assert.True(t, ok)
 		assert.Equal(t, codes.NotFound, statusErr.Code())
-		assert.Contains(t, statusErr.Message(), "post not found")
+		assert.Equal(t, "post not found", statusErr.Message())
 
 		mockPostService.AssertExpectations(t)
 	})
 
 	t.Run("ValidationErrorFromService", func(t *testing.T) {
 		mockPostService := new(mockpost.Service)
-		handler := post_grpc.NewGetPostHandler(mockPostService, validate)
+		handler := post_grpc.NewGetPostHandler(mockPostService, validate, testLogger)
 
 		postID := int64(123)
 		req := &pb.GetPostRequest{
@@ -205,14 +208,14 @@ func TestGetPostHandler_GetPost(t *testing.T) {
 		statusErr, ok := status.FromError(err)
 		assert.True(t, ok)
 		assert.Equal(t, codes.InvalidArgument, statusErr.Code())
-		assert.Contains(t, statusErr.Message(), "validation failed")
+		assert.Equal(t, "post retrieval validation failed", statusErr.Message())
 
 		mockPostService.AssertExpectations(t)
 	})
 
 	t.Run("InternalError", func(t *testing.T) {
 		mockPostService := new(mockpost.Service)
-		handler := post_grpc.NewGetPostHandler(mockPostService, validate)
+		handler := post_grpc.NewGetPostHandler(mockPostService, validate, testLogger)
 
 		postID := int64(123)
 		req := &pb.GetPostRequest{
@@ -229,7 +232,7 @@ func TestGetPostHandler_GetPost(t *testing.T) {
 		statusErr, ok := status.FromError(err)
 		assert.True(t, ok)
 		assert.Equal(t, codes.Internal, statusErr.Code())
-		assert.Contains(t, statusErr.Message(), "failed to get post")
+		assert.Equal(t, "failed to get post", statusErr.Message())
 
 		mockPostService.AssertExpectations(t)
 	})

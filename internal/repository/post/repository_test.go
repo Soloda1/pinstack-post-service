@@ -2,10 +2,11 @@ package post_repository_test
 
 import (
 	"context"
-	"github.com/jackc/pgx/v5/pgtype"
 	post_repository "pinstack-post-service/internal/repository/post"
 	"testing"
 	"time"
+
+	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -416,15 +417,17 @@ func TestPostRepository_List(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := repo.List(context.Background(), tt.filters)
+			got, total, err := repo.List(context.Background(), tt.filters)
 
 			if tt.wantErr != nil {
 				assert.Error(t, err)
 				assert.Equal(t, tt.wantErr, err)
 				assert.Nil(t, got)
+				assert.Zero(t, total)
 			} else {
 				assert.NoError(t, err)
 				assert.Len(t, got, tt.wantLen)
+				assert.True(t, total >= len(got))
 
 				if len(got) > 1 {
 					for i := 0; i < len(got)-1; i++ {

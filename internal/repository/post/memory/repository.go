@@ -7,10 +7,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/jackc/pgx/v5/pgtype"
 	"pinstack-post-service/internal/custom_errors"
 	"pinstack-post-service/internal/logger"
 	"pinstack-post-service/internal/model"
+
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 type PostRepository struct {
@@ -29,6 +30,8 @@ func NewPostRepository(log *logger.Logger) *PostRepository {
 }
 
 func (p *PostRepository) Create(ctx context.Context, post *model.Post) (*model.Post, error) {
+	p.log.Debug("Creating new post (memory impl)", slog.Int64("author_id", post.AuthorID), slog.String("title", post.Title))
+
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
@@ -46,6 +49,7 @@ func (p *PostRepository) Create(ctx context.Context, post *model.Post) (*model.P
 
 	p.posts[newPost.ID] = newPost
 
+	p.log.Debug("Successfully created post (memory impl)", slog.Int64("id", newPost.ID), slog.Int64("author_id", newPost.AuthorID))
 	result := *newPost
 	return &result, nil
 }
@@ -117,44 +121,70 @@ func (p *PostRepository) Delete(ctx context.Context, id int64) error {
 	return nil
 }
 
-func (p *PostRepository) List(ctx context.Context, filters model.PostFilters) ([]*model.Post, error) {
+func (p *PostRepository) List(ctx context.Context, filters model.PostFilters) ([]*model.Post, int, error) {
+	p.log.Debug("Listing posts with filters (memory impl)",
+		slog.Any("author_id", filters.AuthorID),
+		slog.Any("created_after", filters.CreatedAfter),
+		slog.Any("created_before", filters.CreatedBefore),
+		slog.Any("tag_names", filters.TagNames),
+		slog.Any("limit", filters.Limit),
+		slog.Any("offset", filters.Offset))
+
 	p.mu.RLock()
 	defer p.mu.RUnlock()
 
-	var result []*model.Post
+	var filteredPosts []*model.Post
 	for _, post := range p.posts {
 		if filters.AuthorID != nil && post.AuthorID != *filters.AuthorID {
+			p.log.Debug("Skipping post: author ID doesn't match", slog.Int64("post_id", post.ID),
+				slog.Int64("post_author", post.AuthorID), slog.Int64("filter_author", *filters.AuthorID))
 			continue
 		}
-		if filters.CreatedAfter != nil && post.CreatedAt.Time.Before(filters.CreatedAfter.Time) {
+		if filters.CreatedAfter != nil && (post.CreatedAt.Time.Before(filters.CreatedAfter.Time) || post.CreatedAt.Time.Equal(filters.CreatedAfter.Time)) {
+			p.log.Debug("Skipping post: creation time not after filter", slog.Int64("post_id", post.ID),
+				slog.Time("post_time", post.CreatedAt.Time), slog.Time("filter_time", filters.CreatedAfter.Time))
 			continue
 		}
 		if filters.CreatedBefore != nil && post.CreatedAt.Time.After(filters.CreatedBefore.Time) {
+			p.log.Debug("Skipping post: creation time after filter", slog.Int64("post_id", post.ID),
+				slog.Time("post_time", post.CreatedAt.Time), slog.Time("filter_time", filters.CreatedBefore.Time))
 			continue
 		}
+		// TagNames filtering not implemented in memory repository
 
+		p.log.Debug("Post passed all filters", slog.Int64("post_id", post.ID))
 		postCopy := *post
-		result = append(result, &postCopy)
+		filteredPosts = append(filteredPosts, &postCopy)
 	}
 
-	sort.Slice(result, func(i, j int) bool {
-		return result[i].CreatedAt.Time.After(result[j].CreatedAt.Time)
+	sort.Slice(filteredPosts, func(i, j int) bool {
+		return filteredPosts[i].CreatedAt.Time.After(filteredPosts[j].CreatedAt.Time)
 	})
 
+	total := len(filteredPosts)
+	p.log.Debug("Total matching posts before pagination", slog.Int("total", total))
+
+	// Apply offset
 	if filters.Offset != nil {
 		offset := int(*filters.Offset)
-		if offset >= len(result) {
-			return []*model.Post{}, nil
+		p.log.Debug("Applying offset", slog.Int("offset", offset))
+		if offset >= len(filteredPosts) {
+			p.log.Debug("Offset exceeds results count, returning empty list",
+				slog.Int("offset", offset), slog.Int("results_count", len(filteredPosts)))
+			return []*model.Post{}, total, nil
 		}
-		result = result[offset:]
+		filteredPosts = filteredPosts[offset:]
 	}
 
+	// Apply limit
 	if filters.Limit != nil {
 		limit := int(*filters.Limit)
-		if limit < len(result) {
-			result = result[:limit]
+		p.log.Debug("Applying limit", slog.Int("limit", limit), slog.Int("results_count", len(filteredPosts)))
+		if limit < len(filteredPosts) {
+			filteredPosts = filteredPosts[:limit]
 		}
 	}
 
-	return result, nil
+	p.log.Debug("Returning filtered posts", slog.Int("count", len(filteredPosts)), slog.Int("total", total))
+	return filteredPosts, total, nil
 }

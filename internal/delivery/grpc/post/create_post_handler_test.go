@@ -3,6 +3,9 @@ package post_grpc_test
 import (
 	"context"
 	"errors"
+	"testing"
+	"time"
+
 	"github.com/go-playground/validator/v10"
 	"github.com/jackc/pgx/v5/pgtype"
 	pb "github.com/soloda1/pinstack-proto-definitions/gen/go/pinstack-proto-definitions/post/v1"
@@ -12,20 +15,21 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/timestamppb"
+
 	"pinstack-post-service/internal/custom_errors"
 	post_grpc "pinstack-post-service/internal/delivery/grpc/post"
+	"pinstack-post-service/internal/logger"
 	"pinstack-post-service/internal/model"
 	mockpost "pinstack-post-service/mocks/post"
-	"testing"
-	"time"
 )
 
 func TestCreatePostHandler_CreatePost(t *testing.T) {
 	validate := validator.New()
+	testLogger := logger.New("test")
 
 	t.Run("Success", func(t *testing.T) {
 		mockPostService := new(mockpost.Service)
-		handler := post_grpc.NewCreatePostHandler(mockPostService, validate)
+		handler := post_grpc.NewCreatePostHandler(mockPostService, validate, testLogger)
 
 		req := &pb.CreatePostRequest{
 			AuthorId: 123,
@@ -92,7 +96,7 @@ func TestCreatePostHandler_CreatePost(t *testing.T) {
 
 	t.Run("ValidationError", func(t *testing.T) {
 		mockPostService := new(mockpost.Service)
-		handler := post_grpc.NewCreatePostHandler(mockPostService, validate)
+		handler := post_grpc.NewCreatePostHandler(mockPostService, validate, testLogger)
 
 		req := &pb.CreatePostRequest{
 			AuthorId: 123,
@@ -108,14 +112,14 @@ func TestCreatePostHandler_CreatePost(t *testing.T) {
 		statusErr, ok := status.FromError(err)
 		assert.True(t, ok)
 		assert.Equal(t, codes.InvalidArgument, statusErr.Code())
-		assert.Contains(t, statusErr.Message(), "invalid request")
+		assert.Equal(t, "invalid request", statusErr.Message())
 
 		mockPostService.AssertNotCalled(t, "CreatePost")
 	})
 
 	t.Run("ServiceValidationError", func(t *testing.T) {
 		mockPostService := new(mockpost.Service)
-		handler := post_grpc.NewCreatePostHandler(mockPostService, validate)
+		handler := post_grpc.NewCreatePostHandler(mockPostService, validate, testLogger)
 
 		req := &pb.CreatePostRequest{
 			AuthorId: 123,
@@ -139,7 +143,7 @@ func TestCreatePostHandler_CreatePost(t *testing.T) {
 
 	t.Run("ServiceError", func(t *testing.T) {
 		mockPostService := new(mockpost.Service)
-		handler := post_grpc.NewCreatePostHandler(mockPostService, validate)
+		handler := post_grpc.NewCreatePostHandler(mockPostService, validate, testLogger)
 
 		req := &pb.CreatePostRequest{
 			AuthorId: 123,
@@ -163,7 +167,7 @@ func TestCreatePostHandler_CreatePost(t *testing.T) {
 
 	t.Run("MediaTypeValidation", func(t *testing.T) {
 		mockPostService := new(mockpost.Service)
-		handler := post_grpc.NewCreatePostHandler(mockPostService, validate)
+		handler := post_grpc.NewCreatePostHandler(mockPostService, validate, testLogger)
 
 		req := &pb.CreatePostRequest{
 			AuthorId: 123,
@@ -192,7 +196,7 @@ func TestCreatePostHandler_CreatePost(t *testing.T) {
 
 	t.Run("SuccessWithNullableFields", func(t *testing.T) {
 		mockPostService := new(mockpost.Service)
-		handler := post_grpc.NewCreatePostHandler(mockPostService, validate)
+		handler := post_grpc.NewCreatePostHandler(mockPostService, validate, testLogger)
 
 		req := &pb.CreatePostRequest{
 			AuthorId: 123,
@@ -231,7 +235,7 @@ func TestCreatePostHandler_CreatePost(t *testing.T) {
 
 	t.Run("CompleteDataFlow", func(t *testing.T) {
 		mockPostService := new(mockpost.Service)
-		handler := post_grpc.NewCreatePostHandler(mockPostService, validate)
+		handler := post_grpc.NewCreatePostHandler(mockPostService, validate, testLogger)
 
 		createdAt := time.Now()
 		updatedAt := time.Now()

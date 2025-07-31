@@ -2,6 +2,8 @@ package post_grpc
 
 import (
 	"context"
+	"errors"
+	"log/slog"
 
 	"github.com/go-playground/validator/v10"
 	pb "github.com/soloda1/pinstack-proto-definitions/gen/go/pinstack-proto-definitions/post/v1"
@@ -10,6 +12,7 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"pinstack-post-service/internal/custom_errors"
+	"pinstack-post-service/internal/logger"
 	"pinstack-post-service/internal/model"
 )
 
@@ -21,12 +24,14 @@ type GetPostHandler struct {
 	pb.UnimplementedPostServiceServer
 	postService PostGetter
 	validate    *validator.Validate
+	log         *logger.Logger
 }
 
-func NewGetPostHandler(postService PostGetter, validate *validator.Validate) *GetPostHandler {
+func NewGetPostHandler(postService PostGetter, validate *validator.Validate, log *logger.Logger) *GetPostHandler {
 	return &GetPostHandler{
 		postService: postService,
 		validate:    validate,
+		log:         log,
 	}
 }
 
@@ -35,23 +40,30 @@ type GetPostRequestInternal struct {
 }
 
 func (h *GetPostHandler) GetPost(ctx context.Context, req *pb.GetPostRequest) (*pb.Post, error) {
+	h.log.Debug("Handling GetPost request", slog.Int64("post_id", req.GetId()))
+
 	validationReq := &GetPostRequestInternal{
 		PostID: req.GetId(),
 	}
 
 	if err := h.validate.Struct(validationReq); err != nil {
-		return nil, status.Errorf(codes.InvalidArgument, "invalid request: %v", err)
+		h.log.Debug("GetPost validation failed", slog.Int64("post_id", req.GetId()), slog.String("error", err.Error()))
+		return nil, status.Error(codes.InvalidArgument, "invalid request")
 	}
 
+	h.log.Debug("Getting post by ID", slog.Int64("post_id", req.GetId()))
 	retrievedPostModel, err := h.postService.GetPostByID(ctx, req.GetId())
 	if err != nil {
-		switch err {
-		case custom_errors.ErrPostNotFound:
-			return nil, status.Errorf(codes.NotFound, "post not found: %v", err)
-		case custom_errors.ErrPostValidation: // Assuming validation might also occur on retrieval path
-			return nil, status.Errorf(codes.InvalidArgument, "post retrieval validation failed: %v", err)
+		switch {
+		case errors.Is(err, custom_errors.ErrPostNotFound):
+			h.log.Debug("Post not found", slog.Int64("post_id", req.GetId()))
+			return nil, status.Error(codes.NotFound, "post not found")
+		case errors.Is(err, custom_errors.ErrPostValidation):
+			h.log.Debug("Post retrieval validation failed", slog.Int64("post_id", req.GetId()), slog.String("error", err.Error()))
+			return nil, status.Error(codes.InvalidArgument, "post retrieval validation failed")
 		default:
-			return nil, status.Errorf(codes.Internal, "failed to get post: %v", err)
+			h.log.Error("Failed to get post", slog.Int64("post_id", req.GetId()), slog.String("error", err.Error()))
+			return nil, status.Error(codes.Internal, "failed to get post")
 		}
 	}
 
@@ -107,6 +119,12 @@ func (h *GetPostHandler) GetPost(ctx context.Context, req *pb.GetPostRequest) (*
 		CreatedAt: createdAtPb,
 		UpdatedAt: updatedAtPb,
 	}
+
+	h.log.Debug("Post retrieved successfully",
+		slog.Int64("post_id", postID),
+		slog.Int64("author_id", authorID),
+		slog.Int("tags_count", len(pbTags)),
+		slog.Int("media_count", len(pbMedia)))
 
 	return resp, nil
 }
