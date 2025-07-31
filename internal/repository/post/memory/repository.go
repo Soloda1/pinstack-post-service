@@ -7,10 +7,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/jackc/pgx/v5/pgtype"
 	"pinstack-post-service/internal/custom_errors"
 	"pinstack-post-service/internal/logger"
 	"pinstack-post-service/internal/model"
+
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 type PostRepository struct {
@@ -117,11 +118,11 @@ func (p *PostRepository) Delete(ctx context.Context, id int64) error {
 	return nil
 }
 
-func (p *PostRepository) List(ctx context.Context, filters model.PostFilters) ([]*model.Post, error) {
+func (p *PostRepository) List(ctx context.Context, filters model.PostFilters) ([]*model.Post, int, error) {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
 
-	var result []*model.Post
+	var filteredPosts []*model.Post
 	for _, post := range p.posts {
 		if filters.AuthorID != nil && post.AuthorID != *filters.AuthorID {
 			continue
@@ -132,29 +133,34 @@ func (p *PostRepository) List(ctx context.Context, filters model.PostFilters) ([
 		if filters.CreatedBefore != nil && post.CreatedAt.Time.After(filters.CreatedBefore.Time) {
 			continue
 		}
+		// TagNames filtering not implemented in memory repository
 
 		postCopy := *post
-		result = append(result, &postCopy)
+		filteredPosts = append(filteredPosts, &postCopy)
 	}
 
-	sort.Slice(result, func(i, j int) bool {
-		return result[i].CreatedAt.Time.After(result[j].CreatedAt.Time)
+	sort.Slice(filteredPosts, func(i, j int) bool {
+		return filteredPosts[i].CreatedAt.Time.After(filteredPosts[j].CreatedAt.Time)
 	})
 
+	total := len(filteredPosts)
+
+	// Apply offset
 	if filters.Offset != nil {
 		offset := int(*filters.Offset)
-		if offset >= len(result) {
-			return []*model.Post{}, nil
+		if offset >= len(filteredPosts) {
+			return []*model.Post{}, total, nil
 		}
-		result = result[offset:]
+		filteredPosts = filteredPosts[offset:]
 	}
 
+	// Apply limit
 	if filters.Limit != nil {
 		limit := int(*filters.Limit)
-		if limit < len(result) {
-			result = result[:limit]
+		if limit < len(filteredPosts) {
+			filteredPosts = filteredPosts[:limit]
 		}
 	}
 
-	return result, nil
+	return filteredPosts, total, nil
 }

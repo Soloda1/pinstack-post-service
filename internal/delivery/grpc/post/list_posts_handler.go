@@ -6,6 +6,7 @@ import (
 	"pinstack-post-service/internal/model"
 
 	"github.com/go-playground/validator/v10"
+	"github.com/jackc/pgx/v5/pgtype"
 	pb "github.com/soloda1/pinstack-proto-definitions/gen/go/pinstack-proto-definitions/post/v1"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -13,7 +14,7 @@ import (
 )
 
 type PostLister interface {
-	ListPosts(ctx context.Context, filters *model.PostFilters) ([]*model.PostDetailed, error)
+	ListPosts(ctx context.Context, filters *model.PostFilters) ([]*model.PostDetailed, int, error)
 }
 
 type ListPostsHandler struct {
@@ -67,7 +68,27 @@ func (h *ListPostsHandler) ListPosts(ctx context.Context, req *pb.ListPostsReque
 		Offset:   offsetPtr,
 	}
 
-	posts, err := h.postService.ListPosts(ctx, filters)
+	if req.CreatedAfter != nil {
+		createdAfter := pgtype.Timestamptz{
+			Time:  req.CreatedAfter.AsTime(),
+			Valid: true,
+		}
+		filters.CreatedAfter = &createdAfter
+	}
+
+	if req.CreatedBefore != nil {
+		createdBefore := pgtype.Timestamptz{
+			Time:  req.CreatedBefore.AsTime(),
+			Valid: true,
+		}
+		filters.CreatedBefore = &createdBefore
+	}
+
+	if len(req.TagNames) > 0 {
+		filters.TagNames = req.TagNames
+	}
+
+	posts, total, err := h.postService.ListPosts(ctx, filters)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "failed to list posts: %v", err)
 	}
@@ -133,7 +154,7 @@ func (h *ListPostsHandler) ListPosts(ctx context.Context, req *pb.ListPostsReque
 
 	resp := &pb.ListPostsResponse{
 		Posts: pbPosts,
-		Total: int64(len(pbPosts)),
+		Total: int64(total),
 	}
 
 	return resp, nil

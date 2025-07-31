@@ -12,6 +12,7 @@ import (
 	post_repository "pinstack-post-service/internal/repository/post"
 	"pinstack-post-service/internal/repository/postgres"
 	tag_repository "pinstack-post-service/internal/repository/tag"
+	"strings"
 )
 
 type PostService struct {
@@ -59,7 +60,11 @@ func (s *PostService) CreatePost(ctx context.Context, post *model.CreatePostDTO)
 		if !txCommitted && tx != nil {
 			rollbackErr := tx.Rollback(ctx)
 			if rollbackErr != nil {
-				s.log.Error("Failed to rollback transaction", slog.String("error", rollbackErr.Error()))
+				if !strings.Contains(rollbackErr.Error(), "tx is closed") && !strings.Contains(rollbackErr.Error(), "commit unexpectedly resulted in rollback") {
+					s.log.Error("Failed to rollback transaction", slog.String("error", rollbackErr.Error()))
+				} else {
+					s.log.Debug("Transaction already closed during rollback", slog.String("error", rollbackErr.Error()))
+				}
 			}
 		}
 	}()
@@ -164,6 +169,10 @@ func (s *PostService) CreatePost(ctx context.Context, post *model.CreatePostDTO)
 
 	err = tx.Commit(ctx)
 	if err != nil {
+		if strings.Contains(err.Error(), "commit unexpectedly resulted in rollback") {
+			s.log.Warn("Transaction commit resulted in rollback", slog.String("error", err.Error()))
+			return nil, custom_errors.ErrDatabaseQuery
+		}
 		s.log.Error("Failed to commit transaction", slog.String("error", err.Error()))
 		return nil, custom_errors.ErrDatabaseQuery
 	}
@@ -248,11 +257,11 @@ func (s *PostService) GetPostByID(ctx context.Context, id int64) (*model.PostDet
 	return postDetailed, nil
 }
 
-func (s *PostService) ListPosts(ctx context.Context, filters *model.PostFilters) ([]*model.PostDetailed, error) {
-	posts, err := s.postRepo.List(ctx, *filters)
+func (s *PostService) ListPosts(ctx context.Context, filters *model.PostFilters) ([]*model.PostDetailed, int, error) {
+	posts, total, err := s.postRepo.List(ctx, *filters)
 	if err != nil {
 		s.log.Error("Failed to list posts", slog.String("error", err.Error()))
-		return nil, custom_errors.ErrDatabaseQuery
+		return nil, 0, custom_errors.ErrDatabaseQuery
 	}
 
 	result := make([]*model.PostDetailed, 0, len(posts))
@@ -265,7 +274,7 @@ func (s *PostService) ListPosts(ctx context.Context, filters *model.PostFilters)
 				media = nil
 			default:
 				s.log.Error("Failed to get media by post", slog.String("error", err.Error()), slog.Int64("id", post.ID))
-				return nil, custom_errors.ErrDatabaseQuery
+				return nil, 0, custom_errors.ErrDatabaseQuery
 			}
 		}
 
@@ -277,7 +286,7 @@ func (s *PostService) ListPosts(ctx context.Context, filters *model.PostFilters)
 				tags = nil
 			default:
 				s.log.Error("Failed to find tags by post", slog.String("error", err.Error()), slog.Int64("id", post.ID))
-				return nil, custom_errors.ErrDatabaseQuery
+				return nil, 0, custom_errors.ErrDatabaseQuery
 			}
 		}
 
@@ -285,11 +294,11 @@ func (s *PostService) ListPosts(ctx context.Context, filters *model.PostFilters)
 		if err != nil {
 			switch {
 			case errors.Is(err, custom_errors.ErrUserNotFound):
-				s.log.Debug("Author not found", slog.Int64("authorID", post.AuthorID))
-				return nil, custom_errors.ErrUserNotFound
+				s.log.Debug("Author not found", slog.Int64("authorID", post.AuthorID), slog.Any("post", post))
+				return nil, 0, custom_errors.ErrUserNotFound
 			default:
 				s.log.Error("Failed to get author", slog.String("error", err.Error()), slog.Int64("authorID", post.AuthorID))
-				return nil, custom_errors.ErrDatabaseQuery
+				return nil, 0, custom_errors.ErrDatabaseQuery
 			}
 		}
 
@@ -301,7 +310,7 @@ func (s *PostService) ListPosts(ctx context.Context, filters *model.PostFilters)
 		}
 		result = append(result, postDetailed)
 	}
-	return result, nil
+	return result, total, nil
 }
 
 func (s *PostService) UpdatePost(ctx context.Context, userID int64, id int64, post *model.UpdatePostDTO) (err error) {
@@ -316,7 +325,11 @@ func (s *PostService) UpdatePost(ctx context.Context, userID int64, id int64, po
 		if !txCommitted && tx != nil {
 			rollbackErr := tx.Rollback(ctx)
 			if rollbackErr != nil {
-				s.log.Error("Failed to rollback transaction", slog.String("error", rollbackErr.Error()))
+				if !strings.Contains(rollbackErr.Error(), "tx is closed") && !strings.Contains(rollbackErr.Error(), "commit unexpectedly resulted in rollback") {
+					s.log.Error("Failed to rollback transaction", slog.String("error", rollbackErr.Error()))
+				} else {
+					s.log.Debug("Transaction already closed during rollback", slog.String("error", rollbackErr.Error()))
+				}
 			}
 		}
 	}()
@@ -423,6 +436,10 @@ func (s *PostService) UpdatePost(ctx context.Context, userID int64, id int64, po
 
 	err = tx.Commit(ctx)
 	if err != nil {
+		if strings.Contains(err.Error(), "commit unexpectedly resulted in rollback") {
+			s.log.Warn("Transaction commit resulted in rollback", slog.String("error", err.Error()))
+			return custom_errors.ErrDatabaseQuery
+		}
 		s.log.Error("Failed to commit transaction", slog.String("error", err.Error()))
 		return custom_errors.ErrDatabaseQuery
 	}
@@ -443,7 +460,11 @@ func (s *PostService) DeletePost(ctx context.Context, userID int64, id int64) (e
 		if !txCommitted && tx != nil {
 			rollbackErr := tx.Rollback(ctx)
 			if rollbackErr != nil {
-				s.log.Error("Failed to rollback transaction", slog.String("error", rollbackErr.Error()))
+				if !strings.Contains(rollbackErr.Error(), "tx is closed") && !strings.Contains(rollbackErr.Error(), "commit unexpectedly resulted in rollback") {
+					s.log.Error("Failed to rollback transaction", slog.String("error", rollbackErr.Error()))
+				} else {
+					s.log.Debug("Transaction already closed during rollback", slog.String("error", rollbackErr.Error()))
+				}
 			}
 		}
 	}()
@@ -529,6 +550,10 @@ func (s *PostService) DeletePost(ctx context.Context, userID int64, id int64) (e
 	}
 	err = tx.Commit(ctx)
 	if err != nil {
+		if strings.Contains(err.Error(), "commit unexpectedly resulted in rollback") {
+			s.log.Warn("Transaction commit resulted in rollback", slog.String("error", err.Error()))
+			return custom_errors.ErrDatabaseQuery
+		}
 		s.log.Error("Failed to commit transaction", slog.String("error", err.Error()))
 		return custom_errors.ErrDatabaseQuery
 	}

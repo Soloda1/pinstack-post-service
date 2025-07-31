@@ -9,11 +9,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 	"pinstack-post-service/internal/custom_errors"
 	"pinstack-post-service/internal/logger"
 	"pinstack-post-service/internal/model"
+
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 type PostRepository struct {
@@ -181,7 +182,7 @@ func (p *PostRepository) Delete(ctx context.Context, id int64) error {
 	return nil
 }
 
-func (p *PostRepository) List(ctx context.Context, filters model.PostFilters) ([]*model.Post, error) {
+func (p *PostRepository) List(ctx context.Context, filters model.PostFilters) ([]*model.Post, int, error) {
 	args := pgx.NamedArgs{}
 	baseQuery := `SELECT p.id, p.author_id, p.title, p.content, p.created_at, p.updated_at FROM posts p`
 
@@ -230,7 +231,7 @@ func (p *PostRepository) List(ctx context.Context, filters model.PostFilters) ([
 	rows, err := p.db.Query(ctx, baseQuery, args)
 	if err != nil {
 		p.log.Error("Error listing posts", slog.String("error", err.Error()))
-		return nil, custom_errors.ErrDatabaseQuery
+		return nil, 0, custom_errors.ErrDatabaseQuery
 	}
 	defer rows.Close()
 
@@ -247,15 +248,32 @@ func (p *PostRepository) List(ctx context.Context, filters model.PostFilters) ([
 		)
 		if err != nil {
 			p.log.Error("Error scanning post during List", slog.String("error", err.Error()))
-			return nil, custom_errors.ErrDatabaseScan
+			return nil, 0, custom_errors.ErrDatabaseScan
 		}
 		posts = append(posts, &post)
 	}
 
 	if err = rows.Err(); err != nil {
 		p.log.Error("Error iterating rows during List", slog.String("error", err.Error()))
-		return nil, custom_errors.ErrDatabaseQuery
+		return nil, 0, custom_errors.ErrDatabaseQuery
 	}
 
-	return posts, nil
+	countQuery := "SELECT COUNT(*) FROM posts p"
+
+	if len(filters.TagNames) > 0 {
+		countQuery += " JOIN posts_tags pt ON p.id = pt.post_id JOIN tags t ON pt.tag_id = t.id"
+	}
+
+	if len(whereClauses) > 0 {
+		countQuery += " WHERE " + strings.Join(whereClauses, " AND ")
+	}
+
+	var total int
+	err = p.db.QueryRow(ctx, countQuery, args).Scan(&total)
+	if err != nil {
+		p.log.Error("Error counting posts", slog.String("error", err.Error()))
+		return nil, 0, custom_errors.ErrDatabaseQuery
+	}
+
+	return posts, total, nil
 }
