@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	post_grpc "pinstack-post-service/internal/delivery/grpc/post"
+	"pinstack-post-service/internal/logger"
 	"pinstack-post-service/internal/model"
 	mockpost "pinstack-post-service/mocks/post"
 	"testing"
@@ -22,10 +23,11 @@ import (
 
 func TestListPostsHandler_ListPosts(t *testing.T) {
 	validate := validator.New()
+	testLogger := logger.New("test")
 
 	t.Run("Success_WithAllFilters", func(t *testing.T) {
 		mockPostService := new(mockpost.Service)
-		handler := post_grpc.NewListPostsHandler(mockPostService, validate)
+		handler := post_grpc.NewListPostsHandler(mockPostService, validate, testLogger)
 
 		req := &pb.ListPostsRequest{
 			AuthorId: 123,
@@ -132,7 +134,7 @@ func TestListPostsHandler_ListPosts(t *testing.T) {
 
 	t.Run("Success_EmptyFilters", func(t *testing.T) {
 		mockPostService := new(mockpost.Service)
-		handler := post_grpc.NewListPostsHandler(mockPostService, validate)
+		handler := post_grpc.NewListPostsHandler(mockPostService, validate, testLogger)
 
 		req := &pb.ListPostsRequest{}
 
@@ -156,7 +158,7 @@ func TestListPostsHandler_ListPosts(t *testing.T) {
 
 	t.Run("Success_OnlyAuthorIDFilter", func(t *testing.T) {
 		mockPostService := new(mockpost.Service)
-		handler := post_grpc.NewListPostsHandler(mockPostService, validate)
+		handler := post_grpc.NewListPostsHandler(mockPostService, validate, testLogger)
 
 		req := &pb.ListPostsRequest{
 			AuthorId: 123,
@@ -182,7 +184,7 @@ func TestListPostsHandler_ListPosts(t *testing.T) {
 
 	t.Run("ValidationError_NegativeOffset", func(t *testing.T) {
 		mockPostService := new(mockpost.Service)
-		handler := post_grpc.NewListPostsHandler(mockPostService, validate)
+		handler := post_grpc.NewListPostsHandler(mockPostService, validate, testLogger)
 
 		req := &pb.ListPostsRequest{
 			AuthorId: 123,
@@ -198,14 +200,14 @@ func TestListPostsHandler_ListPosts(t *testing.T) {
 		statusErr, ok := status.FromError(err)
 		assert.True(t, ok)
 		assert.Equal(t, codes.InvalidArgument, statusErr.Code())
-		assert.Contains(t, statusErr.Message(), "invalid request")
+		assert.Equal(t, "invalid request", statusErr.Message())
 
 		mockPostService.AssertNotCalled(t, "ListPosts")
 	})
 
 	t.Run("ValidationError_TooLargeLimit", func(t *testing.T) {
 		mockPostService := new(mockpost.Service)
-		handler := post_grpc.NewListPostsHandler(mockPostService, validate)
+		handler := post_grpc.NewListPostsHandler(mockPostService, validate, testLogger)
 
 		req := &pb.ListPostsRequest{
 			Limit: 500,
@@ -219,14 +221,14 @@ func TestListPostsHandler_ListPosts(t *testing.T) {
 		statusErr, ok := status.FromError(err)
 		assert.True(t, ok)
 		assert.Equal(t, codes.InvalidArgument, statusErr.Code())
-		assert.Contains(t, statusErr.Message(), "invalid request")
+		assert.Equal(t, "invalid request", statusErr.Message())
 
 		mockPostService.AssertNotCalled(t, "ListPosts")
 	})
 
 	t.Run("ServiceError", func(t *testing.T) {
 		mockPostService := new(mockpost.Service)
-		handler := post_grpc.NewListPostsHandler(mockPostService, validate)
+		handler := post_grpc.NewListPostsHandler(mockPostService, validate, testLogger)
 
 		req := &pb.ListPostsRequest{
 			Limit:  10,
@@ -244,14 +246,14 @@ func TestListPostsHandler_ListPosts(t *testing.T) {
 		statusErr, ok := status.FromError(err)
 		assert.True(t, ok)
 		assert.Equal(t, codes.Internal, statusErr.Code())
-		assert.Contains(t, statusErr.Message(), "failed to list posts")
+		assert.Equal(t, "failed to list posts", statusErr.Message())
 
 		mockPostService.AssertExpectations(t)
 	})
 
 	t.Run("Success_WithNullableFields", func(t *testing.T) {
 		mockPostService := new(mockpost.Service)
-		handler := post_grpc.NewListPostsHandler(mockPostService, validate)
+		handler := post_grpc.NewListPostsHandler(mockPostService, validate, testLogger)
 
 		req := &pb.ListPostsRequest{
 			Limit: 10,

@@ -2,6 +2,7 @@ package post_grpc
 
 import (
 	"context"
+	"log/slog"
 
 	"pinstack-post-service/internal/model"
 
@@ -11,6 +12,8 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/timestamppb"
+
+	"pinstack-post-service/internal/logger"
 )
 
 type PostLister interface {
@@ -21,12 +24,14 @@ type ListPostsHandler struct {
 	pb.UnimplementedPostServiceServer
 	postService PostLister
 	validate    *validator.Validate
+	log         *logger.Logger
 }
 
-func NewListPostsHandler(postService PostLister, validate *validator.Validate) *ListPostsHandler {
+func NewListPostsHandler(postService PostLister, validate *validator.Validate, log *logger.Logger) *ListPostsHandler {
 	return &ListPostsHandler{
 		postService: postService,
 		validate:    validate,
+		log:         log,
 	}
 }
 
@@ -37,6 +42,12 @@ type ListPostsRequestInternal struct {
 }
 
 func (h *ListPostsHandler) ListPosts(ctx context.Context, req *pb.ListPostsRequest) (*pb.ListPostsResponse, error) {
+	h.log.Debug("Handling ListPosts request",
+		slog.Int64("author_id", req.GetAuthorId()),
+		slog.Int("limit", int(req.GetLimit())),
+		slog.Int("offset", int(req.GetOffset())),
+		slog.Int("tag_names_count", len(req.GetTagNames())))
+
 	var authorIDPtr *int64
 	if req.AuthorId != 0 {
 		authorIDPtr = &req.AuthorId
@@ -59,9 +70,12 @@ func (h *ListPostsHandler) ListPosts(ctx context.Context, req *pb.ListPostsReque
 	}
 
 	if err := h.validate.Struct(validationReq); err != nil {
-		return nil, status.Errorf(codes.InvalidArgument, "invalid request: %v", err)
+		h.log.Debug("ListPosts validation failed",
+			slog.String("error", err.Error()))
+		return nil, status.Error(codes.InvalidArgument, "invalid request")
 	}
 
+	h.log.Debug("Building post filters")
 	filters := &model.PostFilters{
 		AuthorID: authorIDPtr,
 		Limit:    limitPtr,
@@ -88,9 +102,16 @@ func (h *ListPostsHandler) ListPosts(ctx context.Context, req *pb.ListPostsReque
 		filters.TagNames = req.TagNames
 	}
 
+	h.log.Debug("Fetching posts with filters",
+		slog.Any("author_id", filters.AuthorID),
+		slog.Any("limit", filters.Limit),
+		slog.Any("offset", filters.Offset),
+		slog.Int("tag_names_count", len(filters.TagNames)))
+
 	posts, total, err := h.postService.ListPosts(ctx, filters)
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, "failed to list posts: %v", err)
+		h.log.Error("Failed to list posts", slog.String("error", err.Error()))
+		return nil, status.Error(codes.Internal, "failed to list posts")
 	}
 
 	pbPosts := make([]*pb.Post, len(posts))
@@ -156,6 +177,10 @@ func (h *ListPostsHandler) ListPosts(ctx context.Context, req *pb.ListPostsReque
 		Posts: pbPosts,
 		Total: int64(total),
 	}
+
+	h.log.Debug("Listed posts successfully",
+		slog.Int("posts_count", len(pbPosts)),
+		slog.Int("total", total))
 
 	return resp, nil
 }

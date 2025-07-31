@@ -3,6 +3,7 @@ package post_grpc
 import (
 	"context"
 	"errors"
+	"log/slog"
 
 	"github.com/go-playground/validator/v10"
 	pb "github.com/soloda1/pinstack-proto-definitions/gen/go/pinstack-proto-definitions/post/v1"
@@ -11,6 +12,7 @@ import (
 	"google.golang.org/protobuf/types/known/emptypb"
 
 	"pinstack-post-service/internal/custom_errors"
+	"pinstack-post-service/internal/logger"
 )
 
 type PostDeleter interface {
@@ -21,12 +23,14 @@ type DeletePostHandler struct {
 	pb.UnimplementedPostServiceServer
 	postService PostDeleter
 	validate    *validator.Validate
+	log         *logger.Logger
 }
 
-func NewDeletePostHandler(postService PostDeleter, validate *validator.Validate) *DeletePostHandler {
+func NewDeletePostHandler(postService PostDeleter, validate *validator.Validate, log *logger.Logger) *DeletePostHandler {
 	return &DeletePostHandler{
 		postService: postService,
 		validate:    validate,
+		log:         log,
 	}
 }
 
@@ -35,37 +39,59 @@ type DeletePostRequestInternal struct {
 }
 
 func (h *DeletePostHandler) DeletePost(ctx context.Context, req *pb.DeletePostRequest) (*emptypb.Empty, error) {
+	h.log.Debug("Received DeletePost request",
+		slog.Int64("post_id", req.GetId()),
+		slog.Int64("user_id", req.GetUserId()))
+
 	validationReq := &DeletePostRequestInternal{
 		Id: req.GetId(),
 	}
 
 	if err := h.validate.Struct(validationReq); err != nil {
-		return nil, status.Errorf(codes.InvalidArgument, "invalid request: %v", err)
+		h.log.Debug("Request validation failed",
+			slog.Int64("post_id", req.GetId()),
+			slog.Int64("user_id", req.GetUserId()),
+			slog.String("error", err.Error()))
+		return nil, status.Error(codes.InvalidArgument, "invalid request")
 	}
 
 	err := h.postService.DeletePost(ctx, req.GetUserId(), req.GetId())
 	if err != nil {
+		h.log.Debug("Error deleting post",
+			slog.Int64("post_id", req.GetId()),
+			slog.Int64("user_id", req.GetUserId()),
+			slog.String("error", err.Error()))
+
 		switch {
 		case errors.Is(err, custom_errors.ErrPostNotFound):
-			return nil, status.Errorf(codes.NotFound, "post not found: %v", err)
+			return nil, status.Error(codes.NotFound, "post not found")
 		case errors.Is(err, custom_errors.ErrPostValidation):
-			return nil, status.Errorf(codes.InvalidArgument, "post delete validation failed: %v", err)
+			return nil, status.Error(codes.InvalidArgument, "validation failed")
 		case errors.Is(err, custom_errors.ErrForbidden):
-			return nil, status.Errorf(codes.PermissionDenied, "user is not the author of this post: %v", err)
+			return nil, status.Error(codes.PermissionDenied, "user is not the author")
 		case errors.Is(err, custom_errors.ErrMediaQueryFailed):
-			return nil, status.Errorf(codes.Internal, "failed to query media for post: %v", err)
+			h.log.Error("Failed to query media", slog.Int64("post_id", req.GetId()), slog.String("error", err.Error()))
+			return nil, status.Error(codes.Internal, "failed to query media")
 		case errors.Is(err, custom_errors.ErrMediaDetachFailed):
-			return nil, status.Errorf(codes.Internal, "failed to detach media from post: %v", err)
+			h.log.Error("Failed to detach media", slog.Int64("post_id", req.GetId()), slog.String("error", err.Error()))
+			return nil, status.Error(codes.Internal, "failed to detach media")
 		case errors.Is(err, custom_errors.ErrTagQueryFailed):
-			return nil, status.Errorf(codes.Internal, "failed to query tags for post: %v", err)
+			h.log.Error("Failed to query tags", slog.Int64("post_id", req.GetId()), slog.String("error", err.Error()))
+			return nil, status.Error(codes.Internal, "failed to query tags")
 		case errors.Is(err, custom_errors.ErrTagDeleteFailed):
-			return nil, status.Errorf(codes.Internal, "failed to remove tags from post: %v", err)
+			h.log.Error("Failed to remove tags", slog.Int64("post_id", req.GetId()), slog.String("error", err.Error()))
+			return nil, status.Error(codes.Internal, "failed to remove tags")
 		case errors.Is(err, custom_errors.ErrDatabaseQuery):
-			return nil, status.Errorf(codes.Internal, "database error when deleting post: %v", err)
+			h.log.Error("Database error", slog.Int64("post_id", req.GetId()), slog.String("error", err.Error()))
+			return nil, status.Error(codes.Internal, "database error")
 		default:
-			return nil, status.Errorf(codes.Internal, "failed to delete post: %v", err)
+			h.log.Error("Unexpected error deleting post", slog.Int64("post_id", req.GetId()), slog.String("error", err.Error()))
+			return nil, status.Error(codes.Internal, "failed to delete post")
 		}
 	}
 
+	h.log.Debug("Post deleted successfully",
+		slog.Int64("post_id", req.GetId()),
+		slog.Int64("user_id", req.GetUserId()))
 	return &emptypb.Empty{}, nil
 }
