@@ -31,7 +31,7 @@ func NewPostGRPCService(postService *post_service.PostService, log *logger.Logge
 	createPostHandler := NewCreatePostHandler(postService, validate)
 	getPostHandler := NewGetPostHandler(postService, validate)
 	listPostsHandler := NewListPostsHandler(postService, validate)
-	updatePostHandler := NewUpdatePostHandler(postService, validate)
+	updatePostHandler := NewUpdatePostHandler(postService, validate, log)
 	deletePostHandler := NewDeletePostHandler(postService, validate)
 	return &PostGRPCService{
 		postService:       postService,

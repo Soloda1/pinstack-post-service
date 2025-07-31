@@ -3,6 +3,7 @@ package post_grpc
 import (
 	"context"
 	"errors"
+	"log/slog"
 
 	"github.com/go-playground/validator/v10"
 	pb "github.com/soloda1/pinstack-proto-definitions/gen/go/pinstack-proto-definitions/post/v1"
@@ -11,6 +12,7 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"pinstack-post-service/internal/custom_errors"
+	"pinstack-post-service/internal/logger"
 	"pinstack-post-service/internal/model"
 )
 
@@ -23,12 +25,14 @@ type UpdatePostHandler struct {
 	pb.UnimplementedPostServiceServer
 	postService PostUpdater
 	validate    *validator.Validate
+	log         *logger.Logger
 }
 
-func NewUpdatePostHandler(postService PostUpdater, validate *validator.Validate) *UpdatePostHandler {
+func NewUpdatePostHandler(postService PostUpdater, validate *validator.Validate, log *logger.Logger) *UpdatePostHandler {
 	return &UpdatePostHandler{
 		postService: postService,
 		validate:    validate,
+		log:         log,
 	}
 }
 
@@ -41,6 +45,14 @@ type UpdatePostRequestInternal struct {
 }
 
 func (h *UpdatePostHandler) UpdatePost(ctx context.Context, req *pb.UpdatePostRequest) (*pb.Post, error) {
+	h.log.Debug("Received UpdatePost request",
+		slog.Int64("post_id", req.GetId()),
+		slog.Int64("user_id", req.GetUserId()),
+		slog.Bool("has_title_update", req.Title != ""),
+		slog.Bool("has_content_update", req.Content != ""),
+		slog.Int("media_items_count", len(req.GetMedia())),
+		slog.Int("tags_count", len(req.GetTags())))
+
 	internalMedia := make([]*MediaInputInternal, len(req.GetMedia()))
 	for i, m := range req.GetMedia() {
 		internalMedia[i] = &MediaInputInternal{
@@ -59,18 +71,36 @@ func (h *UpdatePostHandler) UpdatePost(ctx context.Context, req *pb.UpdatePostRe
 	}
 
 	if err := h.validate.Struct(validationReq); err != nil {
+		h.log.Debug("Request validation failed",
+			slog.Int64("post_id", req.GetId()),
+			slog.Int64("user_id", req.GetUserId()),
+			slog.String("error", err.Error()))
 		return nil, status.Errorf(codes.InvalidArgument, "invalid request: %v", err)
 	}
 
 	dtoMediaItems := make([]*model.PostMediaInput, 0, len(req.GetMedia()))
 	for i, m := range req.GetMedia() {
-
 		position := m.GetPosition()
+
 		if position < MinMediaPosition || position > MaxMediaPosition {
+			h.log.Debug("Invalid media position, adjusting",
+				slog.Int("original_position", int(position)),
+				slog.Int("index", i),
+				slog.String("url", m.GetUrl()))
+
 			position = int32(i + 1)
+
 			if position > MaxMediaPosition {
+				h.log.Debug("Skipping media item due to position constraints",
+					slog.Int("adjusted_position", int(position)),
+					slog.Int("max_allowed", MaxMediaPosition),
+					slog.String("url", m.GetUrl()))
 				continue
 			}
+
+			h.log.Debug("Media position adjusted",
+				slog.Int("new_position", int(position)),
+				slog.String("url", m.GetUrl()))
 		}
 
 		dtoMediaItems = append(dtoMediaItems, &model.PostMediaInput{
@@ -90,27 +120,34 @@ func (h *UpdatePostHandler) UpdatePost(ctx context.Context, req *pb.UpdatePostRe
 
 	err := h.postService.UpdatePost(ctx, req.GetUserId(), req.GetId(), updateDTO)
 	if err != nil {
+		h.log.Debug("Error updating post", slog.Int64("id", req.GetId()), slog.Int64("user_id", req.GetUserId()), slog.String("error", err.Error()))
 		switch {
 		case errors.Is(err, custom_errors.ErrPostNotFound):
-			return nil, status.Errorf(codes.NotFound, "post not found: %v", err)
+			return nil, status.Error(codes.NotFound, custom_errors.ErrPostNotFound.Error())
 		case errors.Is(err, custom_errors.ErrPostValidation):
-			return nil, status.Errorf(codes.InvalidArgument, "post update validation failed: %v", err)
-		case errors.Is(err, custom_errors.ErrInvalidInput):
-			return nil, status.Errorf(codes.PermissionDenied, "user is not author of post: %v", err)
+			return nil, status.Error(codes.InvalidArgument, custom_errors.ErrPostValidation.Error())
+		case errors.Is(err, custom_errors.ErrForbidden) || errors.Is(err, custom_errors.ErrInvalidInput):
+			// Map both ErrForbidden and ErrInvalidInput to PermissionDenied for consistency with API gateway
+			return nil, status.Error(codes.PermissionDenied, custom_errors.ErrForbidden.Error())
 		default:
-			return nil, status.Errorf(codes.Internal, "failed to update post: %v", err)
+			h.log.Error("Unexpected error updating post", slog.Int64("id", req.GetId()), slog.String("error", err.Error()))
+			return nil, status.Error(codes.Internal, custom_errors.ErrInternalServiceError.Error())
 		}
 	}
 
 	updatedPost, err := h.postService.GetPostByID(ctx, req.GetId())
 	if err != nil {
+		h.log.Debug("Error getting updated post", slog.Int64("id", req.GetId()), slog.String("error", err.Error()))
 		switch {
 		case errors.Is(err, custom_errors.ErrPostNotFound):
-			return nil, status.Errorf(codes.NotFound, "post not found: %v", err)
+			return nil, status.Error(codes.NotFound, custom_errors.ErrPostNotFound.Error())
 		case errors.Is(err, custom_errors.ErrPostValidation):
-			return nil, status.Errorf(codes.InvalidArgument, "post update validation failed: %v", err)
+			return nil, status.Error(codes.InvalidArgument, custom_errors.ErrPostValidation.Error())
+		case errors.Is(err, custom_errors.ErrForbidden):
+			return nil, status.Error(codes.PermissionDenied, custom_errors.ErrForbidden.Error())
 		default:
-			return nil, status.Errorf(codes.Internal, "failed to update post: %v", err)
+			h.log.Error("Unexpected error retrieving updated post", slog.Int64("id", req.GetId()), slog.String("error", err.Error()))
+			return nil, status.Error(codes.Internal, custom_errors.ErrInternalServiceError.Error())
 		}
 	}
 
@@ -167,5 +204,10 @@ func (h *UpdatePostHandler) UpdatePost(ctx context.Context, req *pb.UpdatePostRe
 		UpdatedAt: updatedAtPb,
 	}
 
+	h.log.Debug("Successfully updated post",
+		slog.Int64("post_id", postID),
+		slog.Int64("author_id", authorID),
+		slog.Int("tags_count", len(pbTags)),
+		slog.Int("media_count", len(pbMedia)))
 	return resp, nil
 }

@@ -15,19 +15,22 @@ import (
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
-	"github.com/jackc/pgx/v5/pgtype"
 	"pinstack-post-service/internal/custom_errors"
 	post_grpc "pinstack-post-service/internal/delivery/grpc/post"
+	"pinstack-post-service/internal/logger"
 	"pinstack-post-service/internal/model"
 	mockpost "pinstack-post-service/mocks/post"
+
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 func TestUpdatePostHandler_UpdatePost(t *testing.T) {
 	validate := validator.New()
+	testLogger := logger.New("test")
 
 	t.Run("Success_FullUpdate", func(t *testing.T) {
 		mockPostService := new(mockpost.Service)
-		handler := post_grpc.NewUpdatePostHandler(mockPostService, validate)
+		handler := post_grpc.NewUpdatePostHandler(mockPostService, validate, testLogger)
 
 		userID := int64(123)
 		postID := int64(456)
@@ -119,7 +122,7 @@ func TestUpdatePostHandler_UpdatePost(t *testing.T) {
 
 	t.Run("Success_PartialUpdate", func(t *testing.T) {
 		mockPostService := new(mockpost.Service)
-		handler := post_grpc.NewUpdatePostHandler(mockPostService, validate)
+		handler := post_grpc.NewUpdatePostHandler(mockPostService, validate, testLogger)
 
 		userID := int64(123)
 		postID := int64(456)
@@ -173,7 +176,7 @@ func TestUpdatePostHandler_UpdatePost(t *testing.T) {
 
 	t.Run("ValidationError", func(t *testing.T) {
 		mockPostService := new(mockpost.Service)
-		handler := post_grpc.NewUpdatePostHandler(mockPostService, validate)
+		handler := post_grpc.NewUpdatePostHandler(mockPostService, validate, testLogger)
 
 		req := &pb.UpdatePostRequest{
 			UserId:  123,
@@ -198,7 +201,7 @@ func TestUpdatePostHandler_UpdatePost(t *testing.T) {
 
 	t.Run("ValidationError_InvalidMedia", func(t *testing.T) {
 		mockPostService := new(mockpost.Service)
-		handler := post_grpc.NewUpdatePostHandler(mockPostService, validate)
+		handler := post_grpc.NewUpdatePostHandler(mockPostService, validate, testLogger)
 
 		req := &pb.UpdatePostRequest{
 			UserId:  123,
@@ -228,7 +231,7 @@ func TestUpdatePostHandler_UpdatePost(t *testing.T) {
 
 	t.Run("PostNotFound", func(t *testing.T) {
 		mockPostService := new(mockpost.Service)
-		handler := post_grpc.NewUpdatePostHandler(mockPostService, validate)
+		handler := post_grpc.NewUpdatePostHandler(mockPostService, validate, testLogger)
 
 		userID := int64(123)
 		postID := int64(999)
@@ -260,7 +263,7 @@ func TestUpdatePostHandler_UpdatePost(t *testing.T) {
 
 	t.Run("ValidationErrorFromService", func(t *testing.T) {
 		mockPostService := new(mockpost.Service)
-		handler := post_grpc.NewUpdatePostHandler(mockPostService, validate)
+		handler := post_grpc.NewUpdatePostHandler(mockPostService, validate, testLogger)
 
 		userID := int64(123)
 		postID := int64(456)
@@ -288,9 +291,9 @@ func TestUpdatePostHandler_UpdatePost(t *testing.T) {
 		assert.Contains(t, statusErr.Message(), "validation failed")
 	})
 
-	t.Run("NotAuthorError", func(t *testing.T) {
+	t.Run("NotAuthorError_InvalidInput", func(t *testing.T) {
 		mockPostService := new(mockpost.Service)
-		handler := post_grpc.NewUpdatePostHandler(mockPostService, validate)
+		handler := post_grpc.NewUpdatePostHandler(mockPostService, validate, testLogger)
 
 		userID := int64(123)
 		postID := int64(456)
@@ -315,12 +318,42 @@ func TestUpdatePostHandler_UpdatePost(t *testing.T) {
 		statusErr, ok := status.FromError(err)
 		assert.True(t, ok)
 		assert.Equal(t, codes.PermissionDenied, statusErr.Code())
-		assert.Contains(t, statusErr.Message(), "user is not author")
+		assert.Contains(t, statusErr.Message(), "forbidden")
+	})
+
+	t.Run("NotAuthorError_Forbidden", func(t *testing.T) {
+		mockPostService := new(mockpost.Service)
+		handler := post_grpc.NewUpdatePostHandler(mockPostService, validate, testLogger)
+
+		userID := int64(123)
+		postID := int64(456)
+		title := "Updated Title"
+		content := "Updated Content"
+
+		req := &pb.UpdatePostRequest{
+			UserId:  userID,
+			Id:      postID,
+			Title:   title,
+			Content: content,
+		}
+
+		mockPostService.On("UpdatePost", mock.Anything, userID, postID, mock.Anything).
+			Return(custom_errors.ErrForbidden)
+
+		resp, err := handler.UpdatePost(context.Background(), req)
+
+		assert.Nil(t, resp)
+		assert.Error(t, err)
+
+		statusErr, ok := status.FromError(err)
+		assert.True(t, ok)
+		assert.Equal(t, codes.PermissionDenied, statusErr.Code())
+		assert.Contains(t, statusErr.Message(), "forbidden")
 	})
 
 	t.Run("InternalError_Update", func(t *testing.T) {
 		mockPostService := new(mockpost.Service)
-		handler := post_grpc.NewUpdatePostHandler(mockPostService, validate)
+		handler := post_grpc.NewUpdatePostHandler(mockPostService, validate, testLogger)
 
 		userID := int64(123)
 		postID := int64(456)
@@ -345,12 +378,12 @@ func TestUpdatePostHandler_UpdatePost(t *testing.T) {
 		statusErr, ok := status.FromError(err)
 		assert.True(t, ok)
 		assert.Equal(t, codes.Internal, statusErr.Code())
-		assert.Contains(t, statusErr.Message(), "failed to update post")
+		assert.Contains(t, statusErr.Message(), "internal service error")
 	})
 
-	t.Run("GetError_AfterSuccessfulUpdate", func(t *testing.T) {
+	t.Run("GetError_PostNotFound", func(t *testing.T) {
 		mockPostService := new(mockpost.Service)
-		handler := post_grpc.NewUpdatePostHandler(mockPostService, validate)
+		handler := post_grpc.NewUpdatePostHandler(mockPostService, validate, testLogger)
 
 		userID := int64(123)
 		postID := int64(456)
@@ -381,9 +414,42 @@ func TestUpdatePostHandler_UpdatePost(t *testing.T) {
 		assert.Contains(t, statusErr.Message(), "post not found")
 	})
 
+	t.Run("GetError_Forbidden", func(t *testing.T) {
+		mockPostService := new(mockpost.Service)
+		handler := post_grpc.NewUpdatePostHandler(mockPostService, validate, testLogger)
+
+		userID := int64(123)
+		postID := int64(456)
+		title := "Updated Title"
+		content := "Updated Content"
+
+		req := &pb.UpdatePostRequest{
+			UserId:  userID,
+			Id:      postID,
+			Title:   title,
+			Content: content,
+		}
+
+		mockPostService.On("UpdatePost", mock.Anything, userID, postID, mock.Anything).
+			Return(nil)
+
+		mockPostService.On("GetPostByID", mock.Anything, postID).
+			Return(nil, custom_errors.ErrForbidden)
+
+		resp, err := handler.UpdatePost(context.Background(), req)
+
+		assert.Nil(t, resp)
+		assert.Error(t, err)
+
+		statusErr, ok := status.FromError(err)
+		assert.True(t, ok)
+		assert.Equal(t, codes.PermissionDenied, statusErr.Code())
+		assert.Contains(t, statusErr.Message(), "forbidden")
+	})
+
 	t.Run("InternalError_Get", func(t *testing.T) {
 		mockPostService := new(mockpost.Service)
-		handler := post_grpc.NewUpdatePostHandler(mockPostService, validate)
+		handler := post_grpc.NewUpdatePostHandler(mockPostService, validate, testLogger)
 
 		userID := int64(123)
 		postID := int64(456)
@@ -411,6 +477,6 @@ func TestUpdatePostHandler_UpdatePost(t *testing.T) {
 		statusErr, ok := status.FromError(err)
 		assert.True(t, ok)
 		assert.Equal(t, codes.Internal, statusErr.Code())
-		assert.Contains(t, statusErr.Message(), "failed to update post")
+		assert.Contains(t, statusErr.Message(), "internal")
 	})
 }
