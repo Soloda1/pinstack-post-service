@@ -464,7 +464,7 @@ func (s *PostService) DeletePost(ctx context.Context, userID int64, id int64) (e
 	}
 	if post.AuthorID != userID {
 		s.log.Debug("User is not author of post", slog.Int64("userID", userID), slog.Int64("authorID", post.AuthorID))
-		return custom_errors.ErrInvalidInput
+		return custom_errors.ErrForbidden
 	}
 
 	media, err := mediaRepo.GetByPost(ctx, id)

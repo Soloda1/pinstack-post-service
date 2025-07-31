@@ -1063,7 +1063,7 @@ func TestPostService_DeletePost(t *testing.T) {
 				postID: 1,
 			},
 			wantErr:     true,
-			wantErrType: custom_errors.ErrInvalidInput,
+			wantErrType: custom_errors.ErrForbidden,
 		},
 		{
 			name: "Error getting media for post (not ErrMediaNotFound)",

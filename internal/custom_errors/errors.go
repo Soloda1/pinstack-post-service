@@ -19,6 +19,7 @@ var (
 	ErrPostValidation   = errors.New("post validation failed")
 	ErrValidationFailed = errors.New("validation failed")
 	ErrInvalidInput     = errors.New("invalid input")
+	ErrForbidden        = errors.New("forbidden")
 	ErrRequiredField    = errors.New("required field is missing")
 )
 

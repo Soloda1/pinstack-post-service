@@ -50,6 +50,18 @@ func (h *DeletePostHandler) DeletePost(ctx context.Context, req *pb.DeletePostRe
 			return nil, status.Errorf(codes.NotFound, "post not found: %v", err)
 		case errors.Is(err, custom_errors.ErrPostValidation):
 			return nil, status.Errorf(codes.InvalidArgument, "post delete validation failed: %v", err)
+		case errors.Is(err, custom_errors.ErrForbidden):
+			return nil, status.Errorf(codes.PermissionDenied, "user is not the author of this post: %v", err)
+		case errors.Is(err, custom_errors.ErrMediaQueryFailed):
+			return nil, status.Errorf(codes.Internal, "failed to query media for post: %v", err)
+		case errors.Is(err, custom_errors.ErrMediaDetachFailed):
+			return nil, status.Errorf(codes.Internal, "failed to detach media from post: %v", err)
+		case errors.Is(err, custom_errors.ErrTagQueryFailed):
+			return nil, status.Errorf(codes.Internal, "failed to query tags for post: %v", err)
+		case errors.Is(err, custom_errors.ErrTagDeleteFailed):
+			return nil, status.Errorf(codes.Internal, "failed to remove tags from post: %v", err)
+		case errors.Is(err, custom_errors.ErrDatabaseQuery):
+			return nil, status.Errorf(codes.Internal, "database error when deleting post: %v", err)
 		default:
 			return nil, status.Errorf(codes.Internal, "failed to delete post: %v", err)
 		}

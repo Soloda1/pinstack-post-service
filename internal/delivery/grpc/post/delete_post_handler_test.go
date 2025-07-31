@@ -3,6 +3,11 @@ package post_grpc_test
 import (
 	"context"
 	"errors"
+	"pinstack-post-service/internal/custom_errors"
+	post_grpc "pinstack-post-service/internal/delivery/grpc/post"
+	mockpost "pinstack-post-service/mocks/post"
+	"testing"
+
 	"github.com/go-playground/validator/v10"
 	pb "github.com/soloda1/pinstack-proto-definitions/gen/go/pinstack-proto-definitions/post/v1"
 	"github.com/stretchr/testify/assert"
@@ -10,10 +15,6 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-	"pinstack-post-service/internal/custom_errors"
-	post_grpc "pinstack-post-service/internal/delivery/grpc/post"
-	mockpost "pinstack-post-service/mocks/post"
-	"testing"
 )
 
 func TestDeletePostHandler_DeletePost(t *testing.T) {
@@ -104,6 +105,150 @@ func TestDeletePostHandler_DeletePost(t *testing.T) {
 		assert.True(t, ok)
 		assert.Equal(t, codes.InvalidArgument, statusErr.Code())
 		assert.Contains(t, statusErr.Message(), "validation failed")
+		mockPostService.AssertExpectations(t)
+	})
+
+	t.Run("ForbiddenError", func(t *testing.T) {
+		mockPostService := new(mockpost.Service)
+		handler := post_grpc.NewDeletePostHandler(mockPostService, validate)
+
+		req := &pb.DeletePostRequest{
+			UserId: 123,
+			Id:     456,
+		}
+
+		mockPostService.On("DeletePost", mock.Anything, int64(123), int64(456)).
+			Return(custom_errors.ErrForbidden)
+
+		resp, err := handler.DeletePost(context.Background(), req)
+
+		assert.Nil(t, resp)
+		assert.Error(t, err)
+
+		statusErr, ok := status.FromError(err)
+		assert.True(t, ok)
+		assert.Equal(t, codes.PermissionDenied, statusErr.Code())
+		assert.Contains(t, statusErr.Message(), "user is not the author")
+		mockPostService.AssertExpectations(t)
+	})
+
+	t.Run("MediaQueryError", func(t *testing.T) {
+		mockPostService := new(mockpost.Service)
+		handler := post_grpc.NewDeletePostHandler(mockPostService, validate)
+
+		req := &pb.DeletePostRequest{
+			UserId: 123,
+			Id:     456,
+		}
+
+		mockPostService.On("DeletePost", mock.Anything, int64(123), int64(456)).
+			Return(custom_errors.ErrMediaQueryFailed)
+
+		resp, err := handler.DeletePost(context.Background(), req)
+
+		assert.Nil(t, resp)
+		assert.Error(t, err)
+
+		statusErr, ok := status.FromError(err)
+		assert.True(t, ok)
+		assert.Equal(t, codes.Internal, statusErr.Code())
+		assert.Contains(t, statusErr.Message(), "failed to query media")
+		mockPostService.AssertExpectations(t)
+	})
+
+	t.Run("MediaDetachError", func(t *testing.T) {
+		mockPostService := new(mockpost.Service)
+		handler := post_grpc.NewDeletePostHandler(mockPostService, validate)
+
+		req := &pb.DeletePostRequest{
+			UserId: 123,
+			Id:     456,
+		}
+
+		mockPostService.On("DeletePost", mock.Anything, int64(123), int64(456)).
+			Return(custom_errors.ErrMediaDetachFailed)
+
+		resp, err := handler.DeletePost(context.Background(), req)
+
+		assert.Nil(t, resp)
+		assert.Error(t, err)
+
+		statusErr, ok := status.FromError(err)
+		assert.True(t, ok)
+		assert.Equal(t, codes.Internal, statusErr.Code())
+		assert.Contains(t, statusErr.Message(), "failed to detach media")
+		mockPostService.AssertExpectations(t)
+	})
+
+	t.Run("TagQueryError", func(t *testing.T) {
+		mockPostService := new(mockpost.Service)
+		handler := post_grpc.NewDeletePostHandler(mockPostService, validate)
+
+		req := &pb.DeletePostRequest{
+			UserId: 123,
+			Id:     456,
+		}
+
+		mockPostService.On("DeletePost", mock.Anything, int64(123), int64(456)).
+			Return(custom_errors.ErrTagQueryFailed)
+
+		resp, err := handler.DeletePost(context.Background(), req)
+
+		assert.Nil(t, resp)
+		assert.Error(t, err)
+
+		statusErr, ok := status.FromError(err)
+		assert.True(t, ok)
+		assert.Equal(t, codes.Internal, statusErr.Code())
+		assert.Contains(t, statusErr.Message(), "failed to query tags")
+		mockPostService.AssertExpectations(t)
+	})
+
+	t.Run("TagDeleteError", func(t *testing.T) {
+		mockPostService := new(mockpost.Service)
+		handler := post_grpc.NewDeletePostHandler(mockPostService, validate)
+
+		req := &pb.DeletePostRequest{
+			UserId: 123,
+			Id:     456,
+		}
+
+		mockPostService.On("DeletePost", mock.Anything, int64(123), int64(456)).
+			Return(custom_errors.ErrTagDeleteFailed)
+
+		resp, err := handler.DeletePost(context.Background(), req)
+
+		assert.Nil(t, resp)
+		assert.Error(t, err)
+
+		statusErr, ok := status.FromError(err)
+		assert.True(t, ok)
+		assert.Equal(t, codes.Internal, statusErr.Code())
+		assert.Contains(t, statusErr.Message(), "failed to remove tags")
+		mockPostService.AssertExpectations(t)
+	})
+
+	t.Run("DatabaseQueryError", func(t *testing.T) {
+		mockPostService := new(mockpost.Service)
+		handler := post_grpc.NewDeletePostHandler(mockPostService, validate)
+
+		req := &pb.DeletePostRequest{
+			UserId: 123,
+			Id:     456,
+		}
+
+		mockPostService.On("DeletePost", mock.Anything, int64(123), int64(456)).
+			Return(custom_errors.ErrDatabaseQuery)
+
+		resp, err := handler.DeletePost(context.Background(), req)
+
+		assert.Nil(t, resp)
+		assert.Error(t, err)
+
+		statusErr, ok := status.FromError(err)
+		assert.True(t, ok)
+		assert.Equal(t, codes.Internal, statusErr.Code())
+		assert.Contains(t, statusErr.Message(), "database error")
 		mockPostService.AssertExpectations(t)
 	})
 
