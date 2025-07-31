@@ -28,7 +28,7 @@ type PostGRPCService struct {
 }
 
 func NewPostGRPCService(postService *post_service.PostService, log *logger.Logger) *PostGRPCService {
-	createPostHandler := NewCreatePostHandler(postService, validate)
+	createPostHandler := NewCreatePostHandler(postService, validate, log)
 	getPostHandler := NewGetPostHandler(postService, validate)
 	listPostsHandler := NewListPostsHandler(postService, validate)
 	updatePostHandler := NewUpdatePostHandler(postService, validate, log)

@@ -2,6 +2,7 @@ package post_grpc
 
 import (
 	"context"
+	"log/slog"
 
 	"github.com/go-playground/validator/v10"
 	pb "github.com/soloda1/pinstack-proto-definitions/gen/go/pinstack-proto-definitions/post/v1"
@@ -10,6 +11,7 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"pinstack-post-service/internal/custom_errors"
+	"pinstack-post-service/internal/logger"
 	"pinstack-post-service/internal/model"
 )
 
@@ -21,12 +23,14 @@ type CreatePostHandler struct {
 	pb.UnimplementedPostServiceServer
 	postService PostCreator
 	validate    *validator.Validate
+	log         *logger.Logger
 }
 
-func NewCreatePostHandler(postService PostCreator, validate *validator.Validate) *CreatePostHandler {
+func NewCreatePostHandler(postService PostCreator, validate *validator.Validate, log *logger.Logger) *CreatePostHandler {
 	return &CreatePostHandler{
 		postService: postService,
 		validate:    validate,
+		log:         log,
 	}
 }
 
@@ -45,6 +49,13 @@ type MediaInputInternal struct {
 }
 
 func (h *CreatePostHandler) CreatePost(ctx context.Context, req *pb.CreatePostRequest) (*pb.Post, error) {
+	h.log.Debug("Received CreatePost request",
+		slog.Int64("author_id", req.GetAuthorId()),
+		slog.String("title", req.GetTitle()),
+		slog.Bool("has_content", req.Content != ""),
+		slog.Int("media_items_count", len(req.GetMedia())),
+		slog.Int("tags_count", len(req.GetTags())))
+
 	internalMedia := make([]*MediaInputInternal, len(req.GetMedia()))
 	for i, m := range req.GetMedia() {
 		internalMedia[i] = &MediaInputInternal{
@@ -63,17 +74,34 @@ func (h *CreatePostHandler) CreatePost(ctx context.Context, req *pb.CreatePostRe
 	}
 
 	if err := h.validate.Struct(validationReq); err != nil {
-		return nil, status.Errorf(codes.InvalidArgument, "invalid request: %v", err)
+		h.log.Debug("Request validation failed",
+			slog.Int64("author_id", req.GetAuthorId()),
+			slog.String("error", err.Error()))
+		return nil, status.Error(codes.InvalidArgument, "invalid request")
 	}
 
 	dtoMediaItems := make([]*model.PostMediaInput, 0, len(req.GetMedia()))
 	for i, m := range req.GetMedia() {
 		position := m.GetPosition()
 		if position < MinMediaPosition || position > MaxMediaPosition {
+			h.log.Debug("Invalid media position, adjusting",
+				slog.Int("original_position", int(position)),
+				slog.Int("index", i),
+				slog.String("url", m.GetUrl()))
+
 			position = int32(i + 1)
+
 			if position > MaxMediaPosition {
+				h.log.Debug("Skipping media item due to position constraints",
+					slog.Int("adjusted_position", int(position)),
+					slog.Int("max_allowed", MaxMediaPosition),
+					slog.String("url", m.GetUrl()))
 				continue
 			}
+
+			h.log.Debug("Media position adjusted",
+				slog.Int("new_position", int(position)),
+				slog.String("url", m.GetUrl()))
 		}
 		dtoMediaItems = append(dtoMediaItems, &model.PostMediaInput{
 			URL:      m.GetUrl(),
@@ -92,11 +120,18 @@ func (h *CreatePostHandler) CreatePost(ctx context.Context, req *pb.CreatePostRe
 
 	createdPostModel, err := h.postService.CreatePost(ctx, postDTO)
 	if err != nil {
+		h.log.Debug("Error creating post",
+			slog.Int64("author_id", req.GetAuthorId()),
+			slog.String("error", err.Error()))
+
 		switch err {
 		case custom_errors.ErrPostValidation:
-			return nil, status.Errorf(codes.InvalidArgument, "post creation validation failed: %v", err)
+			return nil, status.Error(codes.InvalidArgument, "validation failed")
 		default:
-			return nil, status.Errorf(codes.Internal, "failed to create post: %v", err)
+			h.log.Error("Unexpected error creating post",
+				slog.Int64("author_id", req.GetAuthorId()),
+				slog.String("error", err.Error()))
+			return nil, status.Error(codes.Internal, "internal service error")
 		}
 	}
 
@@ -150,6 +185,12 @@ func (h *CreatePostHandler) CreatePost(ctx context.Context, req *pb.CreatePostRe
 		CreatedAt: createdAtPb,
 		UpdatedAt: updatedAtPb,
 	}
+
+	h.log.Debug("Post created successfully",
+		slog.Int64("post_id", postID),
+		slog.Int64("author_id", authorID),
+		slog.Int("tags_count", len(pbTags)),
+		slog.Int("media_count", len(pbMedia)))
 
 	return resp, nil
 }
