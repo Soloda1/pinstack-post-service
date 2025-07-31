@@ -3,6 +3,12 @@ package post_grpc_test
 import (
 	"context"
 	"errors"
+	post_grpc "pinstack-post-service/internal/delivery/grpc/post"
+	"pinstack-post-service/internal/model"
+	mockpost "pinstack-post-service/mocks/post"
+	"testing"
+	"time"
+
 	"github.com/go-playground/validator/v10"
 	"github.com/jackc/pgx/v5/pgtype"
 	pb "github.com/soloda1/pinstack-proto-definitions/gen/go/pinstack-proto-definitions/post/v1"
@@ -12,11 +18,6 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/timestamppb"
-	post_grpc "pinstack-post-service/internal/delivery/grpc/post"
-	"pinstack-post-service/internal/model"
-	mockpost "pinstack-post-service/mocks/post"
-	"testing"
-	"time"
 )
 
 func TestListPostsHandler_ListPosts(t *testing.T) {
@@ -92,7 +93,7 @@ func TestListPostsHandler_ListPosts(t *testing.T) {
 				filters.AuthorID != nil && *filters.AuthorID == req.AuthorId &&
 				filters.Limit != nil && *filters.Limit == int(req.Limit) &&
 				filters.Offset != nil && *filters.Offset == int(req.Offset)
-		})).Return(expectedPosts, nil)
+		})).Return(expectedPosts, len(expectedPosts), nil)
 
 		resp, err := handler.ListPosts(context.Background(), req)
 
@@ -142,7 +143,7 @@ func TestListPostsHandler_ListPosts(t *testing.T) {
 				filters.AuthorID == nil &&
 				filters.Limit == nil &&
 				filters.Offset == nil
-		})).Return(expectedPosts, nil)
+		})).Return(expectedPosts, len(expectedPosts), nil)
 
 		resp, err := handler.ListPosts(context.Background(), req)
 
@@ -168,7 +169,7 @@ func TestListPostsHandler_ListPosts(t *testing.T) {
 				filters.AuthorID != nil && *filters.AuthorID == req.AuthorId &&
 				filters.Limit == nil &&
 				filters.Offset == nil
-		})).Return(expectedPosts, nil)
+		})).Return(expectedPosts, len(expectedPosts), nil)
 
 		resp, err := handler.ListPosts(context.Background(), req)
 
@@ -233,7 +234,7 @@ func TestListPostsHandler_ListPosts(t *testing.T) {
 		}
 
 		mockPostService.On("ListPosts", mock.Anything, mock.Anything).
-			Return(nil, errors.New("database error"))
+			Return(nil, 0, errors.New("database error"))
 
 		resp, err := handler.ListPosts(context.Background(), req)
 
@@ -271,7 +272,7 @@ func TestListPostsHandler_ListPosts(t *testing.T) {
 			},
 		}
 
-		mockPostService.On("ListPosts", mock.Anything, mock.Anything).Return(expectedPosts, nil)
+		mockPostService.On("ListPosts", mock.Anything, mock.Anything).Return(expectedPosts, len(expectedPosts), nil)
 
 		resp, err := handler.ListPosts(context.Background(), req)
 
