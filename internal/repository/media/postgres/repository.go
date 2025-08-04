@@ -40,7 +40,12 @@ func (m *MediaRepository) Attach(ctx context.Context, postID int64, media []*mod
 	}
 
 	result := m.db.SendBatch(ctx, batch)
-	defer result.Close()
+	defer func(result pgx.BatchResults) {
+		err := result.Close()
+		if err != nil {
+			m.log.Error("Failed to close batch result in Attach media", slog.String("error", err.Error()), slog.Int64("post_id", postID))
+		}
+	}(result)
 
 	if _, err := result.Exec(); err != nil {
 		m.log.Error("Media attach failed", slog.String("error", err.Error()), slog.Int64("post_id", postID))
@@ -59,7 +64,12 @@ func (m *MediaRepository) Reorder(ctx context.Context, postID int64, newPosition
 	}
 
 	result := m.db.SendBatch(ctx, batch)
-	defer result.Close()
+	defer func(result pgx.BatchResults) {
+		err := result.Close()
+		if err != nil {
+			m.log.Error("Failed to close batch result in Reorder media", slog.String("error", err.Error()), slog.Int64("post_id", postID))
+		}
+	}(result)
 
 	if _, err := result.Exec(); err != nil {
 		m.log.Error("Media reorder failed", slog.String("error", err.Error()), slog.Int64("post_id", postID))

@@ -150,7 +150,12 @@ func (t *TagRepository) TagPost(ctx context.Context, postID int64, tagNames []st
 	}
 
 	br := t.db.SendBatch(ctx, batch)
-	defer br.Close()
+	defer func(br pgx.BatchResults) {
+		err := br.Close()
+		if err != nil {
+			t.log.Error("Failed to close batch result in TagPost", slog.String("error", err.Error()), slog.Int64("post_id", postID))
+		}
+	}(br)
 
 	for range tagNames {
 		_, err := br.Exec()
@@ -198,7 +203,12 @@ func (t *TagRepository) UntagPost(ctx context.Context, postID int64, tagNames []
 	}
 
 	br := t.db.SendBatch(ctx, batch)
-	defer br.Close()
+	defer func(br pgx.BatchResults) {
+		err := br.Close()
+		if err != nil {
+			t.log.Error("Failed to close batch result in UntagPost", slog.String("error", err.Error()), slog.Int64("post_id", postID))
+		}
+	}(br)
 
 	for range tagNames {
 		_, err := br.Exec()
@@ -242,7 +252,12 @@ func (t *TagRepository) ReplacePostTags(ctx context.Context, postID int64, newTa
 		}
 
 		br := t.db.SendBatch(ctx, batch)
-		defer br.Close()
+		defer func(br pgx.BatchResults) {
+			err := br.Close()
+			if err != nil {
+				t.log.Error("Failed to close batch result in ReplacePostTags", slog.String("error", err.Error()), slog.Int64("post_id", postID))
+			}
+		}(br)
 
 		for range newTags {
 			_, err := br.Exec()

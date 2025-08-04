@@ -60,7 +60,12 @@ func main() {
 		log.Error("Failed to connect to user service", slog.String("error", err.Error()))
 		os.Exit(1)
 	}
-	defer userServiceConn.Close()
+	defer func(userServiceConn *grpc.ClientConn) {
+		err := userServiceConn.Close()
+		if err != nil {
+			log.Error("Failed to close user service connection", slog.String("error", err.Error()))
+		}
+	}(userServiceConn)
 
 	userClient := user_client.NewUserClient(userServiceConn, log)
 	unitOfWork := postgres.NewPostgresUOW(pool, log)
