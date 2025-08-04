@@ -256,8 +256,6 @@ func (t *TagRepository) ReplacePostTags(ctx context.Context, postID int64, newTa
 			err := br.Close()
 			if err != nil {
 				t.log.Error("Failed to close batch result in ReplacePostTags", slog.String("error", err.Error()), slog.Int64("post_id", postID))
-			} else {
-				t.log.Debug("Batch result closed successfully in ReplacePostTags", slog.Int64("post_id", postID))
 			}
 		}(br)
 
