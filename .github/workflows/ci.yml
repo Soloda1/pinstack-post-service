@@ -125,8 +125,8 @@ jobs:
     - name: Run post-specific integration tests
       working-directory: pinstack-system-tests
       run: |
-        echo "🧪 Запуск тестов для gateway_post..."
-        go test -v -count=1 -timeout=10m ./internal/scenarios/integration/gateway_post/...
+        echo "🧪 Запуск тестов для gateway_posts..."
+        go test -v -count=1 -timeout=10m ./internal/scenarios/integration/gateway_posts/...
 
     - name: Collect logs on failure
       if: failure()

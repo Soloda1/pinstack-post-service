@@ -75,7 +75,7 @@ check-services:
 test-post-integration: start-post-infrastructure check-services
 	@echo "🧪 Запуск интеграционных тестов для Post Service..."
 	cd $(SYSTEM_TESTS_DIR) && \
-	go test -v -count=1 -timeout=10m ./internal/scenarios/integration/gateway_post/...
+	go test -v -count=1 -timeout=10m ./internal/scenarios/integration/gateway_posts/...
 
 # Остановка всех контейнеров
 stop-post-infrastructure:
@@ -181,5 +181,5 @@ ci-local: test-all
 quick-test: start-post-infrastructure
 	@echo "⚡ Быстрый запуск тестов без пересборки..."
 	cd $(SYSTEM_TESTS_DIR) && \
-	go test -v -count=1 -timeout=5m ./internal/scenarios/integration/gateway_post/...
+	go test -v -count=1 -timeout=5m ./internal/scenarios/integration/gateway_posts/...
 	$(MAKE) stop-post-infrastructure
