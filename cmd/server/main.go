@@ -64,8 +64,6 @@ func main() {
 		err := userServiceConn.Close()
 		if err != nil {
 			log.Error("Failed to close user service connection", slog.String("error", err.Error()))
-		} else {
-			log.Info("User service connection closed successfully")
 		}
 	}(userServiceConn)
 

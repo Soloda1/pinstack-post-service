@@ -154,8 +154,6 @@ func (t *TagRepository) TagPost(ctx context.Context, postID int64, tagNames []st
 		err := br.Close()
 		if err != nil {
 			t.log.Error("Failed to close batch result in TagPost", slog.String("error", err.Error()), slog.Int64("post_id", postID))
-		} else {
-			t.log.Debug("Batch result closed successfully in TagPost", slog.Int64("post_id", postID))
 		}
 	}(br)
 
@@ -209,8 +207,6 @@ func (t *TagRepository) UntagPost(ctx context.Context, postID int64, tagNames []
 		err := br.Close()
 		if err != nil {
 			t.log.Error("Failed to close batch result in UntagPost", slog.String("error", err.Error()), slog.Int64("post_id", postID))
-		} else {
-			t.log.Debug("Batch result closed successfully in UntagPost", slog.Int64("post_id", postID))
 		}
 	}(br)
 

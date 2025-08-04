@@ -44,8 +44,6 @@ func (m *MediaRepository) Attach(ctx context.Context, postID int64, media []*mod
 		err := result.Close()
 		if err != nil {
 			m.log.Error("Failed to close batch result in Attach media", slog.String("error", err.Error()), slog.Int64("post_id", postID))
-		} else {
-			m.log.Debug("Batch result closed successfully in Attach media", slog.Int64("post_id", postID))
 		}
 	}(result)
 
@@ -70,8 +68,6 @@ func (m *MediaRepository) Reorder(ctx context.Context, postID int64, newPosition
 		err := result.Close()
 		if err != nil {
 			m.log.Error("Failed to close batch result in Reorder media", slog.String("error", err.Error()), slog.Int64("post_id", postID))
-		} else {
-			m.log.Debug("Batch result closed successfully in Reorder media", slog.Int64("post_id", postID))
 		}
 	}(result)
 
