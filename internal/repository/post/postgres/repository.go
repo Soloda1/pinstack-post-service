@@ -4,12 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/soloda1/pinstack-proto-definitions/custom_errors"
 	"log/slog"
 	"pinstack-post-service/internal/repository/postgres/db"
 	"strings"
 	"time"
 
-	"pinstack-post-service/internal/custom_errors"
 	"pinstack-post-service/internal/logger"
 	"pinstack-post-service/internal/model"
 
@@ -118,7 +118,7 @@ func (p *PostRepository) GetByAuthor(ctx context.Context, authorID int64) ([]*mo
 		)
 		if err != nil {
 			p.log.Error("Error scanning post during GetByAuthor", slog.Int64("author_id", authorID), slog.String("error", err.Error()))
-			return nil, custom_errors.ErrDatabaseScan
+			return nil, custom_errors.ErrDatabaseQuery
 		}
 		posts = append(posts, &post)
 	}
@@ -289,7 +289,7 @@ func (p *PostRepository) List(ctx context.Context, filters model.PostFilters) ([
 		)
 		if err != nil {
 			p.log.Error("Error scanning post during List", slog.String("error", err.Error()))
-			return nil, 0, custom_errors.ErrDatabaseScan
+			return nil, 0, custom_errors.ErrDatabaseQuery
 		}
 		posts = append(posts, &post)
 		p.log.Debug("Scanned post in List", slog.Int64("post_id", post.ID), slog.Int64("author_id", post.AuthorID))

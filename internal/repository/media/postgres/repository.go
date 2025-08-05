@@ -3,8 +3,8 @@ package media_repository_postgres
 import (
 	"context"
 	"github.com/jackc/pgx/v5"
+	"github.com/soloda1/pinstack-proto-definitions/custom_errors"
 	"log/slog"
-	"pinstack-post-service/internal/custom_errors"
 	"pinstack-post-service/internal/logger"
 	"pinstack-post-service/internal/model"
 	"pinstack-post-service/internal/repository/postgres/db"

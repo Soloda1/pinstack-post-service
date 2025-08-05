@@ -2,12 +2,12 @@ package media_repository_test
 
 import (
 	"context"
+	"github.com/soloda1/pinstack-proto-definitions/custom_errors"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	media_repository "pinstack-post-service/internal/repository/media"
 	"testing"
 
-	"pinstack-post-service/internal/custom_errors"
 	"pinstack-post-service/internal/logger"
 	"pinstack-post-service/internal/model"
 	"pinstack-post-service/internal/repository/media/memory"
