@@ -3,9 +3,9 @@ package post_service
 import (
 	"context"
 	"errors"
+	"github.com/soloda1/pinstack-proto-definitions/custom_errors"
 	"log/slog"
 	user_client "pinstack-post-service/internal/clients/user"
-	"pinstack-post-service/internal/custom_errors"
 	"pinstack-post-service/internal/logger"
 	"pinstack-post-service/internal/model"
 	media_repository "pinstack-post-service/internal/repository/media"

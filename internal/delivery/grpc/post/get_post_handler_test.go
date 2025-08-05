@@ -3,7 +3,7 @@ package post_grpc_test
 import (
 	"context"
 	"errors"
-	"pinstack-post-service/internal/custom_errors"
+	"github.com/soloda1/pinstack-proto-definitions/custom_errors"
 	post_grpc "pinstack-post-service/internal/delivery/grpc/post"
 	"pinstack-post-service/internal/logger"
 	"pinstack-post-service/internal/model"

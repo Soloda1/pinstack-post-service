@@ -2,13 +2,13 @@ package memory
 
 import (
 	"context"
+	"github.com/soloda1/pinstack-proto-definitions/custom_errors"
 	"log/slog"
 	"sort"
 	"sync"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgtype"
-	"pinstack-post-service/internal/custom_errors"
 	"pinstack-post-service/internal/logger"
 	"pinstack-post-service/internal/model"
 )

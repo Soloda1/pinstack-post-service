@@ -3,6 +3,7 @@ package post_grpc_test
 import (
 	"context"
 	"errors"
+	"github.com/soloda1/pinstack-proto-definitions/custom_errors"
 	"testing"
 	"time"
 
@@ -15,7 +16,6 @@ import (
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
-	"pinstack-post-service/internal/custom_errors"
 	post_grpc "pinstack-post-service/internal/delivery/grpc/post"
 	"pinstack-post-service/internal/logger"
 	"pinstack-post-service/internal/model"

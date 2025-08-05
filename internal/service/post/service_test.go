@@ -3,6 +3,7 @@ package post_service
 import (
 	"context"
 	"errors"
+	"github.com/soloda1/pinstack-proto-definitions/custom_errors"
 	"testing"
 
 	user_client_mock "pinstack-post-service/mocks/user"
@@ -10,7 +11,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 
-	"pinstack-post-service/internal/custom_errors"
 	"pinstack-post-service/internal/logger"
 	"pinstack-post-service/internal/model"
 	media_repository_mock "pinstack-post-service/mocks/media"

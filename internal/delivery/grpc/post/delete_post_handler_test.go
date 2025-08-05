@@ -3,6 +3,7 @@ package post_grpc_test
 import (
 	"context"
 	"errors"
+	"github.com/soloda1/pinstack-proto-definitions/custom_errors"
 	"testing"
 
 	"github.com/go-playground/validator/v10"
@@ -13,7 +14,6 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
-	"pinstack-post-service/internal/custom_errors"
 	post_grpc "pinstack-post-service/internal/delivery/grpc/post"
 	"pinstack-post-service/internal/logger"
 	mockpost "pinstack-post-service/mocks/post"
