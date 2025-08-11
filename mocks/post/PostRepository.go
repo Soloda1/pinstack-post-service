@@ -4,7 +4,7 @@ package mocks
 
 import (
 	context "context"
-	model "pinstack-post-service/internal/model"
+	model "pinstack-post-service/internal/domain/models"
 
 	mock "github.com/stretchr/testify/mock"
 )

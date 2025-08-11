@@ -4,7 +4,7 @@ package postgres
 
 import (
 	context "context"
-	postgres "pinstack-post-service/internal/repository/postgres"
+	postgres "pinstack-post-service/internal/infrastructure/outbound/repository/postgres"
 
 	mock "github.com/stretchr/testify/mock"
 )

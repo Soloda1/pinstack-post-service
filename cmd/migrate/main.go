@@ -4,9 +4,9 @@ import (
 	"flag"
 	"os"
 
-	"pinstack-post-service/config"
-	"pinstack-post-service/internal/logger"
-	"pinstack-post-service/internal/migrator"
+	"pinstack-post-service/internal/infrastructure/config"
+	"pinstack-post-service/internal/infrastructure/logger"
+	"pinstack-post-service/internal/infrastructure/migrator"
 )
 
 func main() {

@@ -16,16 +16,16 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 
-	"pinstack-post-service/config"
-	user_client "pinstack-post-service/internal/clients/user"
-	delivery_grpc "pinstack-post-service/internal/delivery/grpc"
-	post_grpc "pinstack-post-service/internal/delivery/grpc/post"
-	"pinstack-post-service/internal/logger"
-	media_postgres "pinstack-post-service/internal/repository/media/postgres"
-	post_postgres "pinstack-post-service/internal/repository/post/postgres"
-	"pinstack-post-service/internal/repository/postgres"
-	tag_postgres "pinstack-post-service/internal/repository/tag/postgres"
-	post_service "pinstack-post-service/internal/service/post"
+	post_service "pinstack-post-service/internal/application/service/post"
+	"pinstack-post-service/internal/infrastructure/config"
+	delivery_grpc "pinstack-post-service/internal/infrastructure/inbound/grpc"
+	post_grpc "pinstack-post-service/internal/infrastructure/inbound/grpc/post"
+	"pinstack-post-service/internal/infrastructure/logger"
+	user_client "pinstack-post-service/internal/infrastructure/outbound/client/user"
+	media_postgres "pinstack-post-service/internal/infrastructure/outbound/repository/media/postgres"
+	post_postgres "pinstack-post-service/internal/infrastructure/outbound/repository/post/postgres"
+	"pinstack-post-service/internal/infrastructure/outbound/repository/postgres"
+	tag_postgres "pinstack-post-service/internal/infrastructure/outbound/repository/tag/postgres"
 )
 
 func main() {
