@@ -41,7 +41,7 @@ test-unit: check-go-version
 start-post-infrastructure: setup-system-tests
 	@echo "🚀 Запуск полной инфраструктуры для интеграционных тестов..."
 	cd $(SYSTEM_TESTS_DIR) && \
-	docker compose -f docker-compose.test.yml up -d \
+	POST_SERVICE_CONTEXT=../pinstack-post-service docker compose -f docker-compose.test.yml up -d \
 		user-db-test \
 		user-migrator-test \
 		user-service-test \
@@ -51,7 +51,8 @@ start-post-infrastructure: setup-system-tests
 		api-gateway-test \
 		post-db-test \
 		post-migrator-test \
-		post-service-test
+		post-service-test \
+		redis
 	@echo "⏳ Ожидание готовности сервисов..."
 	@sleep 30
 
@@ -61,7 +62,8 @@ check-services:
 	@docker exec pinstack-user-db-test pg_isready -U postgres || (echo "❌ User база данных не готова" && exit 1)
 	@docker exec pinstack-auth-db-test pg_isready -U postgres || (echo "❌ Auth база данных не готова" && exit 1)
 	@docker exec pinstack-post-db-test pg_isready -U postgres || (echo "❌ Post база данных не готова" && exit 1)
-	@echo "✅ Базы данных готовы"
+	@timeout 30 bash -c 'until docker exec pinstack-redis-test redis-cli ping | grep -q PONG; do echo "⏳ Ожидание Redis..."; sleep 2; done' || (echo "❌ Redis не готов" && exit 1)
+	@echo "✅ Базы данных и Redis готовы"
 	@echo "=== User Service logs ==="
 	@docker logs pinstack-user-service-test --tail=10
 	@echo "=== Auth Service logs ==="
@@ -70,6 +72,8 @@ check-services:
 	@docker logs pinstack-post-service-test --tail=10
 	@echo "=== API Gateway logs ==="
 	@docker logs pinstack-api-gateway-test --tail=10
+	@echo "=== Redis logs ==="
+	@docker logs pinstack-redis-test --tail=5
 
 # Интеграционные тесты только для post service
 test-post-integration: start-post-infrastructure check-services
@@ -91,7 +95,8 @@ stop-post-infrastructure:
 		user-db-test \
 		post-service-test \
 		post-migrator-test \
-		post-db-test
+		post-db-test \
+		redis
 	cd $(SYSTEM_TESTS_DIR) && \
 	docker compose -f docker-compose.test.yml rm -f \
 		api-gateway-test \
@@ -103,7 +108,8 @@ stop-post-infrastructure:
 		user-db-test \
 		post-service-test \
 		post-migrator-test \
-		post-db-test
+		post-db-test \
+		redis
 
 # Полная очистка (включая volumes)
 clean-post-infrastructure:
@@ -151,6 +157,44 @@ logs-auth-db:
 logs-post-db:
 	cd $(SYSTEM_TESTS_DIR) && \
 	docker compose -f docker-compose.test.yml logs -f post-db-test
+
+logs-redis:
+	cd $(SYSTEM_TESTS_DIR) && \
+	docker compose -f docker-compose.test.yml logs -f redis
+
+# Redis утилиты для отладки
+redis-cli:
+	@echo "🔍 Подключение к Redis CLI..."
+	docker exec -it pinstack-redis-test redis-cli
+
+redis-info:
+	@echo "📊 Информация о Redis..."
+	docker exec pinstack-redis-test redis-cli info
+
+redis-keys:
+	@echo "🔑 Все ключи в Redis..."
+	docker exec pinstack-redis-test redis-cli keys "*"
+
+redis-flush:
+	@echo "🧹 Очистка всех данных Redis..."
+	@read -p "Очистить все данные Redis? (y/N): " confirm && [ "$$confirm" = "y" ] || exit 1
+	docker exec pinstack-redis-test redis-cli flushall
+	@echo "✅ Redis очищен"
+
+# Быстрый тест с локальным post-service
+quick-test-local: setup-system-tests
+	@echo "⚡ Быстрый запуск тестов с локальным post-service..."
+	cd $(SYSTEM_TESTS_DIR) && \
+	POST_SERVICE_CONTEXT=../pinstack-post-service docker compose -f docker-compose.test.yml up -d \
+		user-db-test user-migrator-test user-service-test \
+		auth-db-test auth-migrator-test auth-service-test \
+		api-gateway-test post-db-test post-migrator-test post-service-test redis
+	@echo "⏳ Ожидание готовности сервисов..."
+	@sleep 30
+	@timeout 30 bash -c 'until docker exec pinstack-redis-test redis-cli ping | grep -q PONG; do echo "⏳ Ожидание Redis..."; sleep 2; done'
+	cd $(SYSTEM_TESTS_DIR) && \
+	go test -v -count=1 -timeout=5m ./internal/scenarios/integration/gateway_posts/...
+	$(MAKE) stop-post-infrastructure
 
 # Очистка
 clean: clean-post-infrastructure
