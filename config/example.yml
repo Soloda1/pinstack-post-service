@@ -24,5 +24,5 @@ redis:
   address: "redis"
   port: 6379
   password: ""
-  db: 0
+  db: 4
   pool_size: 10
