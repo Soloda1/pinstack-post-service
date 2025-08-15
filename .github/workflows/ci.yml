@@ -84,10 +84,18 @@ jobs:
     - name: Install dependencies
       run: go mod download
 
+    - name: Debug directory structure
+      run: |
+        echo "Current directory structure:"
+        ls -la
+        echo "Parent directory:"
+        ls -la ../
+        echo "POST_SERVICE_CONTEXT will be set to: ../"
+
     - name: Start Full Infrastructure for Integration Tests
       working-directory: pinstack-system-tests
       env:
-        POST_SERVICE_CONTEXT: ../pinstack-post-service
+        POST_SERVICE_CONTEXT: ../
       run: |
         # Запускаем все необходимые контейнеры для интеграционных тестов
         docker compose -f docker-compose.test.yml up -d \
