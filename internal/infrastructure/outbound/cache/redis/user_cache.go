@@ -10,7 +10,6 @@ import (
 
 	"pinstack-post-service/internal/domain/models"
 	ports "pinstack-post-service/internal/domain/ports/output"
-	"pinstack-post-service/internal/domain/ports/output/cache"
 
 	"github.com/soloda1/pinstack-proto-definitions/custom_errors"
 )
@@ -20,19 +19,19 @@ const (
 	userCacheTTL       = 15 * time.Minute
 )
 
-type UserCacheImpl struct {
+type UserCache struct {
 	client *Client
 	log    ports.Logger
 }
 
-func NewUserCache(client *Client, log ports.Logger) cache.UserCache {
-	return &UserCacheImpl{
+func NewUserCache(client *Client, log ports.Logger) *UserCache {
+	return &UserCache{
 		client: client,
 		log:    log,
 	}
 }
 
-func (u *UserCacheImpl) GetUser(ctx context.Context, userID int64) (*model.User, error) {
+func (u *UserCache) GetUser(ctx context.Context, userID int64) (*model.User, error) {
 	key := u.getUserKey(userID)
 
 	var user model.User
@@ -52,7 +51,7 @@ func (u *UserCacheImpl) GetUser(ctx context.Context, userID int64) (*model.User,
 	return &user, nil
 }
 
-func (u *UserCacheImpl) SetUser(ctx context.Context, user *model.User) error {
+func (u *UserCache) SetUser(ctx context.Context, user *model.User) error {
 	if user == nil {
 		return fmt.Errorf("user cannot be nil")
 	}
@@ -72,7 +71,7 @@ func (u *UserCacheImpl) SetUser(ctx context.Context, user *model.User) error {
 	return nil
 }
 
-func (u *UserCacheImpl) DeleteUser(ctx context.Context, userID int64) error {
+func (u *UserCache) DeleteUser(ctx context.Context, userID int64) error {
 	key := u.getUserKey(userID)
 
 	if err := u.client.Delete(ctx, key); err != nil {
@@ -86,6 +85,6 @@ func (u *UserCacheImpl) DeleteUser(ctx context.Context, userID int64) error {
 	return nil
 }
 
-func (u *UserCacheImpl) getUserKey(userID int64) string {
+func (u *UserCache) getUserKey(userID int64) string {
 	return userCacheKeyPrefix + strconv.FormatInt(userID, 10)
 }
