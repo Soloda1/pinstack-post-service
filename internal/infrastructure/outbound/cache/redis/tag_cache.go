@@ -99,7 +99,7 @@ func (t *TagCache) GetTag(ctx context.Context, name string) (*model.Tag, error) 
 	var tag model.Tag
 	err := t.client.Get(ctx, key, &tag)
 	if err != nil {
-		if err == custom_errors.ErrCacheMiss {
+		if errors.Is(err, custom_errors.ErrCacheMiss) {
 			t.log.Debug("Tag by name cache miss", slog.String("tag_name", name))
 			return nil, custom_errors.ErrCacheMiss
 		}
