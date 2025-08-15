@@ -21,6 +21,7 @@ import (
 	delivery_grpc "pinstack-post-service/internal/infrastructure/inbound/grpc"
 	post_grpc "pinstack-post-service/internal/infrastructure/inbound/grpc/post"
 	"pinstack-post-service/internal/infrastructure/logger"
+	redis_cache "pinstack-post-service/internal/infrastructure/outbound/cache/redis"
 	user_client "pinstack-post-service/internal/infrastructure/outbound/client/user"
 	media_postgres "pinstack-post-service/internal/infrastructure/outbound/repository/media/postgres"
 	post_postgres "pinstack-post-service/internal/infrastructure/outbound/repository/post/postgres"
@@ -68,12 +69,41 @@ func main() {
 	}(userServiceConn)
 
 	userClient := user_client.NewUserClient(userServiceConn, log)
+
+	log.Info("Connecting to Redis",
+		slog.String("address", cfg.Redis.Address),
+		slog.Int("port", cfg.Redis.Port),
+		slog.Int("db", cfg.Redis.DB))
+	redisClient, err := redis_cache.NewClient(cfg.Redis, log)
+	if err != nil {
+		log.Error("Failed to create Redis client", slog.String("error", err.Error()))
+		os.Exit(1)
+	}
+	defer func() {
+		if err := redisClient.Close(); err != nil {
+			log.Error("Failed to close Redis connection", slog.String("error", err.Error()))
+		}
+	}()
+
+	userCache := redis_cache.NewUserCache(redisClient, log)
+	postCache := redis_cache.NewPostCache(redisClient, log)
+	tagCache := redis_cache.NewTagCache(redisClient, log)
+
 	unitOfWork := postgres.NewPostgresUOW(pool, log)
 	postRepo := post_postgres.NewPostRepository(pool, log)
 	tagRepo := tag_postgres.NewTagRepository(pool, log)
 	mediaRepo := media_postgres.NewMediaRepository(pool, log)
 
-	postService := post_service.NewPostService(postRepo, tagRepo, mediaRepo, unitOfWork, log, userClient)
+	originalPostService := post_service.NewPostService(postRepo, tagRepo, mediaRepo, unitOfWork, log, userClient)
+
+	postService := post_service.NewPostServiceCacheDecorator(
+		originalPostService,
+		userCache,
+		postCache,
+		tagCache,
+		log,
+	)
+
 	postGRPCApi := post_grpc.NewPostGRPCService(postService, log)
 	grpcServer := delivery_grpc.NewServer(postGRPCApi, cfg.GRPCServer.Address, cfg.GRPCServer.Port, log)
 

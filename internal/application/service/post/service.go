@@ -3,7 +3,6 @@ package post_service
 import (
 	"context"
 	"errors"
-	"github.com/soloda1/pinstack-proto-definitions/custom_errors"
 	"log/slog"
 	model "pinstack-post-service/internal/domain/models"
 	output "pinstack-post-service/internal/domain/ports/output"
@@ -13,6 +12,8 @@ import (
 	user_client "pinstack-post-service/internal/domain/ports/output/user"
 	"pinstack-post-service/internal/infrastructure/outbound/repository/postgres"
 	"strings"
+
+	"github.com/soloda1/pinstack-proto-definitions/custom_errors"
 )
 
 type PostService struct {

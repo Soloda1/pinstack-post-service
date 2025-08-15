@@ -1,9 +1,10 @@
 package config
 
 import (
-	"github.com/spf13/viper"
 	"log"
 	"os"
+
+	"github.com/spf13/viper"
 )
 
 type Config struct {
@@ -12,6 +13,7 @@ type Config struct {
 	Database    Database
 	UserService UserService
 	Prometheus  Prometheus
+	Redis       Redis
 }
 
 type GRPCServer struct {
@@ -38,6 +40,14 @@ type Prometheus struct {
 	Port    int
 }
 
+type Redis struct {
+	Address  string
+	Port     int
+	Password string
+	DB       int
+	PoolSize int
+}
+
 func MustLoad() *Config {
 	viper.SetConfigName("config")
 	viper.SetConfigType("yaml")
@@ -60,6 +70,12 @@ func MustLoad() *Config {
 
 	viper.SetDefault("prometheus.address", "0.0.0.0")
 	viper.SetDefault("prometheus.port", 9103)
+
+	viper.SetDefault("redis.address", "redis")
+	viper.SetDefault("redis.port", 6379)
+	viper.SetDefault("redis.password", "")
+	viper.SetDefault("redis.db", 0)
+	viper.SetDefault("redis.pool_size", 10)
 
 	if err := viper.ReadInConfig(); err != nil {
 		log.Printf("Error reading config file: %s", err)
@@ -87,6 +103,13 @@ func MustLoad() *Config {
 		Prometheus: Prometheus{
 			Address: viper.GetString("prometheus.address"),
 			Port:    viper.GetInt("prometheus.port"),
+		},
+		Redis: Redis{
+			Address:  viper.GetString("redis.address"),
+			Port:     viper.GetInt("redis.port"),
+			Password: viper.GetString("redis.password"),
+			DB:       viper.GetInt("redis.db"),
+			PoolSize: viper.GetInt("redis.pool_size"),
 		},
 	}
 

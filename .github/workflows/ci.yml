@@ -84,8 +84,18 @@ jobs:
     - name: Install dependencies
       run: go mod download
 
+    - name: Debug directory structure
+      run: |
+        echo "Current directory structure:"
+        ls -la
+        echo "Parent directory:"
+        ls -la ../
+        echo "POST_SERVICE_CONTEXT will be set to: ../"
+
     - name: Start Full Infrastructure for Integration Tests
       working-directory: pinstack-system-tests
+      env:
+        POST_SERVICE_CONTEXT: ../
       run: |
         # Запускаем все необходимые контейнеры для интеграционных тестов
         docker compose -f docker-compose.test.yml up -d \
@@ -98,7 +108,8 @@ jobs:
           api-gateway-test \
           post-db-test \
           post-migrator-test \
-          post-service-test
+          post-service-test \
+          redis
 
     - name: Wait for services to be ready
       run: |
@@ -108,6 +119,9 @@ jobs:
         timeout 60 bash -c 'until docker exec pinstack-user-db-test pg_isready -U postgres; do sleep 2; done'
         timeout 60 bash -c 'until docker exec pinstack-auth-db-test pg_isready -U postgres; do sleep 2; done'
         timeout 60 bash -c 'until docker exec pinstack-post-db-test pg_isready -U postgres; do sleep 2; done'
+        
+        # Ждем готовности Redis
+        timeout 60 bash -c 'until docker exec pinstack-redis-test redis-cli ping | grep -q PONG; do echo "⏳ Ожидание Redis..."; sleep 2; done'
         
         # Ждем готовности всех сервисов
         sleep 60
@@ -150,6 +164,8 @@ jobs:
         docker compose -f docker-compose.test.yml logs post-migrator-test
         echo "=== Логи Post Database ==="
         docker compose -f docker-compose.test.yml logs post-db-test
+        echo "=== Логи Redis ==="
+        docker compose -f docker-compose.test.yml logs redis
         echo "=== Логи API Gateway ==="
         docker compose -f docker-compose.test.yml logs api-gateway-test
 
