@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"time"
 
 	model "pinstack-post-service/internal/domain/models"
 	output "pinstack-post-service/internal/domain/ports/output"
@@ -52,17 +53,25 @@ func (d *PostServiceCacheDecorator) CreatePost(ctx context.Context, post *model.
 			slog.String("error", err.Error()))
 	}
 
+	start := time.Now()
 	if err := d.postCache.SetPost(ctx, result); err != nil {
 		d.log.Warn("Failed to cache created post",
 			slog.Int64("post_id", result.Post.ID),
 			slog.String("error", err.Error()))
+		d.metrics.RecordCacheOperationDuration("post_set", time.Since(start))
+	} else {
+		d.metrics.RecordCacheOperationDuration("post_set", time.Since(start))
 	}
 
 	if result.Author != nil {
+		userCacheStart := time.Now()
 		if err := d.userCache.SetUser(ctx, result.Author); err != nil {
 			d.log.Warn("Failed to cache author after post creation",
 				slog.Int64("user_id", result.Author.ID),
 				slog.String("error", err.Error()))
+			d.metrics.RecordCacheOperationDuration("user_set", time.Since(userCacheStart))
+		} else {
+			d.metrics.RecordCacheOperationDuration("user_set", time.Since(userCacheStart))
 		}
 	}
 
@@ -72,7 +81,9 @@ func (d *PostServiceCacheDecorator) CreatePost(ctx context.Context, post *model.
 func (d *PostServiceCacheDecorator) GetPostByID(ctx context.Context, id int64) (*model.PostDetailed, error) {
 	d.log.Debug("Getting post by ID with cache decorator", slog.Int64("post_id", id))
 
+	cacheStart := time.Now()
 	cachedPost, err := d.postCache.GetPost(ctx, id)
+	d.metrics.RecordCacheOperationDuration("post_get", time.Since(cacheStart))
 	if err == nil {
 		d.log.Debug("Post found in cache", slog.Int64("post_id", id))
 		d.metrics.IncrementCacheHits()
@@ -93,17 +104,25 @@ func (d *PostServiceCacheDecorator) GetPostByID(ctx context.Context, id int64) (
 		return nil, err
 	}
 
+	setCacheStart := time.Now()
 	if err := d.postCache.SetPost(ctx, post); err != nil {
 		d.log.Warn("Failed to cache post",
 			slog.Int64("post_id", id),
 			slog.String("error", err.Error()))
+		d.metrics.RecordCacheOperationDuration("post_set", time.Since(setCacheStart))
+	} else {
+		d.metrics.RecordCacheOperationDuration("post_set", time.Since(setCacheStart))
 	}
 
 	if post.Author != nil {
+		userCacheStart := time.Now()
 		if err := d.userCache.SetUser(ctx, post.Author); err != nil {
 			d.log.Warn("Failed to cache author",
 				slog.Int64("user_id", post.Author.ID),
 				slog.String("error", err.Error()))
+			d.metrics.RecordCacheOperationDuration("user_set", time.Since(userCacheStart))
+		} else {
+			d.metrics.RecordCacheOperationDuration("user_set", time.Since(userCacheStart))
 		}
 	}
 
@@ -126,20 +145,27 @@ func (d *PostServiceCacheDecorator) ListPosts(ctx context.Context, filters *mode
 	}
 
 	for authorID := range authorIDs {
+		userGetStart := time.Now()
 		if cachedUser, err := d.userCache.GetUser(ctx, authorID); err == nil {
 			d.log.Debug("Author found in cache", slog.Int64("author_id", authorID))
+			d.metrics.RecordCacheOperationDuration("user_get", time.Since(userGetStart))
 			for _, post := range posts {
 				if post.Post != nil && post.Post.AuthorID == authorID {
 					post.Author = cachedUser
 				}
 			}
 		} else {
+			d.metrics.RecordCacheOperationDuration("user_get", time.Since(userGetStart))
 			for _, post := range posts {
 				if post.Post != nil && post.Post.AuthorID == authorID && post.Author != nil {
+					userSetStart := time.Now()
 					if setErr := d.userCache.SetUser(ctx, post.Author); setErr != nil {
 						d.log.Warn("Failed to cache author from list",
 							slog.Int64("author_id", authorID),
 							slog.String("error", setErr.Error()))
+						d.metrics.RecordCacheOperationDuration("user_set", time.Since(userSetStart))
+					} else {
+						d.metrics.RecordCacheOperationDuration("user_set", time.Since(userSetStart))
 					}
 					break
 				}
@@ -160,10 +186,14 @@ func (d *PostServiceCacheDecorator) UpdatePost(ctx context.Context, userID int64
 		return err
 	}
 
+	cacheStart := time.Now()
 	if err := d.postCache.DeletePost(ctx, id); err != nil {
 		d.log.Warn("Failed to invalidate post cache after update",
 			slog.Int64("post_id", id),
 			slog.String("error", err.Error()))
+		d.metrics.RecordCacheOperationDuration("post_delete", time.Since(cacheStart))
+	} else {
+		d.metrics.RecordCacheOperationDuration("post_delete", time.Since(cacheStart))
 	}
 
 	return nil
@@ -179,10 +209,14 @@ func (d *PostServiceCacheDecorator) DeletePost(ctx context.Context, userID int64
 		return err
 	}
 
+	cacheStart := time.Now()
 	if err := d.postCache.DeletePost(ctx, id); err != nil {
 		d.log.Warn("Failed to invalidate post cache after deletion",
 			slog.Int64("post_id", id),
 			slog.String("error", err.Error()))
+		d.metrics.RecordCacheOperationDuration("post_delete", time.Since(cacheStart))
+	} else {
+		d.metrics.RecordCacheOperationDuration("post_delete", time.Since(cacheStart))
 	}
 
 	return nil
