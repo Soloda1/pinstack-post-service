@@ -66,9 +66,9 @@ func (t *PostgresTransaction) PostRepository() post_repository.Repository {
 }
 
 func (t *PostgresTransaction) MediaRepository() media_repository.Repository {
-	return media_repository_postgres.NewMediaRepository(t.tx, t.log)
+	return media_repository_postgres.NewMediaRepository(t.tx, t.log, t.metrics)
 }
 
 func (t *PostgresTransaction) TagRepository() tag_repository.Repository {
-	return tag_repository_postgres.NewTagRepository(t.tx, t.log)
+	return tag_repository_postgres.NewTagRepository(t.tx, t.log, t.metrics)
 }
