@@ -83,10 +83,10 @@ func (d *PostServiceCacheDecorator) GetPostByID(ctx context.Context, id int64) (
 
 	cacheStart := time.Now()
 	cachedPost, err := d.postCache.GetPost(ctx, id)
-	d.metrics.RecordCacheOperationDuration("post_get", time.Since(cacheStart))
 	if err == nil {
 		d.log.Debug("Post found in cache", slog.Int64("post_id", id))
 		d.metrics.IncrementCacheHits()
+		d.metrics.RecordCacheHitDuration("post_get", time.Since(cacheStart))
 		return cachedPost, nil
 	}
 
@@ -94,8 +94,10 @@ func (d *PostServiceCacheDecorator) GetPostByID(ctx context.Context, id int64) (
 		d.log.Warn("Failed to get post from cache",
 			slog.Int64("post_id", id),
 			slog.String("error", err.Error()))
+		d.metrics.RecordCacheOperationDuration("post_get", time.Since(cacheStart))
 	} else {
 		d.metrics.IncrementCacheMisses()
+		d.metrics.RecordCacheMissDuration("post_get", time.Since(cacheStart))
 	}
 
 	d.log.Debug("Post cache miss, fetching from service", slog.Int64("post_id", id))
@@ -148,14 +150,18 @@ func (d *PostServiceCacheDecorator) ListPosts(ctx context.Context, filters *mode
 		userGetStart := time.Now()
 		if cachedUser, err := d.userCache.GetUser(ctx, authorID); err == nil {
 			d.log.Debug("Author found in cache", slog.Int64("author_id", authorID))
-			d.metrics.RecordCacheOperationDuration("user_get", time.Since(userGetStart))
+			d.metrics.RecordCacheHitDuration("user_get", time.Since(userGetStart))
 			for _, post := range posts {
 				if post.Post != nil && post.Post.AuthorID == authorID {
 					post.Author = cachedUser
 				}
 			}
 		} else {
-			d.metrics.RecordCacheOperationDuration("user_get", time.Since(userGetStart))
+			if errors.Is(err, custom_errors.ErrCacheMiss) {
+				d.metrics.RecordCacheMissDuration("user_get", time.Since(userGetStart))
+			} else {
+				d.metrics.RecordCacheOperationDuration("user_get", time.Since(userGetStart))
+			}
 			for _, post := range posts {
 				if post.Post != nil && post.Post.AuthorID == authorID && post.Author != nil {
 					userSetStart := time.Now()

@@ -41,6 +41,14 @@ func (p *PrometheusMetricsProvider) RecordCacheOperationDuration(operation strin
 	CacheOperationDuration.WithLabelValues(operation).Observe(duration.Seconds())
 }
 
+func (p *PrometheusMetricsProvider) RecordCacheHitDuration(operation string, duration time.Duration) {
+	CacheHitDuration.WithLabelValues(operation).Observe(duration.Seconds())
+}
+
+func (p *PrometheusMetricsProvider) RecordCacheMissDuration(operation string, duration time.Duration) {
+	CacheMissDuration.WithLabelValues(operation).Observe(duration.Seconds())
+}
+
 func (p *PrometheusMetricsProvider) IncrementPostOperations(operation string, success bool) {
 	PostOperationsTotal.WithLabelValues(operation, strconv.FormatBool(success)).Inc()
 }

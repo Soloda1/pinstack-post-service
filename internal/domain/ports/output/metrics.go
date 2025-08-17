@@ -12,6 +12,8 @@ type MetricsProvider interface {
 	IncrementCacheHits()
 	IncrementCacheMisses()
 	RecordCacheOperationDuration(operation string, duration time.Duration)
+	RecordCacheHitDuration(operation string, duration time.Duration)
+	RecordCacheMissDuration(operation string, duration time.Duration)
 
 	IncrementPostOperations(operation string, success bool)
 	IncrementTagOperations(operation string, success bool)

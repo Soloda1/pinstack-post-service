@@ -63,6 +63,24 @@ var (
 		[]string{"operation"},
 	)
 
+	CacheHitDuration = promauto.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Name:    "cache_hit_duration_seconds",
+			Help:    "Duration of cache hit operations in seconds",
+			Buckets: prometheus.DefBuckets,
+		},
+		[]string{"operation"},
+	)
+
+	CacheMissDuration = promauto.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Name:    "cache_miss_duration_seconds",
+			Help:    "Duration of cache miss operations in seconds",
+			Buckets: prometheus.DefBuckets,
+		},
+		[]string{"operation"},
+	)
+
 	PostOperationsTotal = promauto.NewCounterVec(
 		prometheus.CounterOpts{
 			Name: "post_operations_total",

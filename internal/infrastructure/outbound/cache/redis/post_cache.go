@@ -40,18 +40,19 @@ func (p *PostCache) GetPost(ctx context.Context, postID int64) (*model.PostDetai
 	var post model.PostDetailed
 	err := p.client.Get(ctx, key, &post)
 	if err != nil {
-		p.metrics.RecordCacheOperationDuration("get", time.Since(start))
 		if errors.Is(err, custom_errors.ErrCacheMiss) {
 			p.log.Debug("Post cache miss", slog.Int64("post_id", postID))
+			p.metrics.RecordCacheMissDuration("post_get", time.Since(start))
 			return nil, custom_errors.ErrCacheMiss
 		}
 		p.log.Error("Failed to get post from cache",
 			slog.Int64("post_id", postID),
 			slog.String("error", err.Error()))
+		p.metrics.RecordCacheOperationDuration("post_get", time.Since(start))
 		return nil, fmt.Errorf("failed to get post from cache: %w", err)
 	}
 
-	p.metrics.RecordCacheOperationDuration("get", time.Since(start))
+	p.metrics.RecordCacheHitDuration("post_get", time.Since(start))
 	p.log.Debug("Post cache hit", slog.Int64("post_id", postID))
 	return &post, nil
 }
@@ -71,11 +72,11 @@ func (p *PostCache) SetPost(ctx context.Context, post *model.PostDetailed) error
 		p.log.Error("Failed to set post cache",
 			slog.Int64("post_id", post.Post.ID),
 			slog.String("error", err.Error()))
-		p.metrics.RecordCacheOperationDuration("set", time.Since(start))
+		p.metrics.RecordCacheOperationDuration("post_set", time.Since(start))
 		return fmt.Errorf("failed to set post cache: %w", err)
 	}
 
-	p.metrics.RecordCacheOperationDuration("set", time.Since(start))
+	p.metrics.RecordCacheOperationDuration("post_set", time.Since(start))
 	p.log.Debug("Post cached successfully",
 		slog.Int64("post_id", post.Post.ID),
 		slog.Duration("ttl", postCacheTTL))
@@ -90,11 +91,11 @@ func (p *PostCache) DeletePost(ctx context.Context, postID int64) error {
 		p.log.Error("Failed to delete post from cache",
 			slog.Int64("post_id", postID),
 			slog.String("error", err.Error()))
-		p.metrics.RecordCacheOperationDuration("delete", time.Since(start))
+		p.metrics.RecordCacheOperationDuration("post_delete", time.Since(start))
 		return fmt.Errorf("failed to delete post from cache: %w", err)
 	}
 
-	p.metrics.RecordCacheOperationDuration("delete", time.Since(start))
+	p.metrics.RecordCacheOperationDuration("post_delete", time.Since(start))
 	p.log.Debug("Post deleted from cache", slog.Int64("post_id", postID))
 	return nil
 }
