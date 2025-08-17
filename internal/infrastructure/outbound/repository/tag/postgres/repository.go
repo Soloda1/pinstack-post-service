@@ -8,6 +8,7 @@ import (
 	model "pinstack-post-service/internal/domain/models"
 	ports "pinstack-post-service/internal/domain/ports/output"
 	"pinstack-post-service/internal/infrastructure/outbound/repository/postgres/db"
+	"time"
 
 	"github.com/soloda1/pinstack-proto-definitions/custom_errors"
 
@@ -16,15 +17,22 @@ import (
 )
 
 type TagRepository struct {
-	log ports.Logger
-	db  db.PgDB
+	log     ports.Logger
+	db      db.PgDB
+	metrics ports.MetricsProvider
 }
 
-func NewTagRepository(db db.PgDB, log ports.Logger) *TagRepository {
-	return &TagRepository{db: db, log: log}
+func NewTagRepository(db db.PgDB, log ports.Logger, metrics ports.MetricsProvider) *TagRepository {
+	return &TagRepository{db: db, log: log, metrics: metrics}
 }
 
-func (t *TagRepository) FindByNames(ctx context.Context, names []string) ([]*model.Tag, error) {
+func (t *TagRepository) FindByNames(ctx context.Context, names []string) (result []*model.Tag, err error) {
+	start := time.Now()
+	defer func() {
+		t.metrics.RecordDatabaseQueryDuration("tag_find_by_names", time.Since(start))
+		t.metrics.IncrementDatabaseQueries("tag_find_by_names", err == nil)
+	}()
+
 	if len(names) == 0 {
 		return nil, nil
 	}
@@ -51,7 +59,13 @@ func (t *TagRepository) FindByNames(ctx context.Context, names []string) ([]*mod
 	return tags, nil
 }
 
-func (t *TagRepository) FindByPost(ctx context.Context, postID int64) ([]*model.Tag, error) {
+func (t *TagRepository) FindByPost(ctx context.Context, postID int64) (result []*model.Tag, err error) {
+	start := time.Now()
+	defer func() {
+		t.metrics.RecordDatabaseQueryDuration("tag_find_by_post", time.Since(start))
+		t.metrics.IncrementDatabaseQueries("tag_find_by_post", err == nil)
+	}()
+
 	query := `
 		SELECT t.id, t.name 
 		FROM tags t
@@ -79,7 +93,13 @@ func (t *TagRepository) FindByPost(ctx context.Context, postID int64) ([]*model.
 	return tags, nil
 }
 
-func (t *TagRepository) Create(ctx context.Context, name string) (*model.Tag, error) {
+func (t *TagRepository) Create(ctx context.Context, name string) (result *model.Tag, err error) {
+	start := time.Now()
+	defer func() {
+		t.metrics.RecordDatabaseQueryDuration("tag_create", time.Since(start))
+		t.metrics.IncrementTagOperations("create", err == nil)
+	}()
+
 	query := `
 		INSERT INTO tags(name)
 		VALUES (@name)
@@ -89,7 +109,7 @@ func (t *TagRepository) Create(ctx context.Context, name string) (*model.Tag, er
 	args := pgx.NamedArgs{"name": name}
 
 	var tag model.Tag
-	err := t.db.QueryRow(ctx, query, args).Scan(&tag.ID, &tag.Name)
+	err = t.db.QueryRow(ctx, query, args).Scan(&tag.ID, &tag.Name)
 
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -115,10 +135,16 @@ func (t *TagRepository) Create(ctx context.Context, name string) (*model.Tag, er
 	return &tag, nil
 }
 
-func (t *TagRepository) DeleteUnused(ctx context.Context) error {
+func (t *TagRepository) DeleteUnused(ctx context.Context) (err error) {
+	start := time.Now()
+	defer func() {
+		t.metrics.RecordDatabaseQueryDuration("tag_delete_unused", time.Since(start))
+		t.metrics.IncrementDatabaseQueries("tag_delete_unused", err == nil)
+	}()
+
 	query := `DELETE FROM tags WHERE id NOT IN (SELECT DISTINCT tag_id FROM posts_tags)`
 
-	_, err := t.db.Exec(ctx, query)
+	_, err = t.db.Exec(ctx, query)
 	if err != nil {
 		t.log.Error("Error deleting unused tags", slog.String("error", err.Error()))
 		return custom_errors.ErrTagDeleteFailed
@@ -126,12 +152,18 @@ func (t *TagRepository) DeleteUnused(ctx context.Context) error {
 	return nil
 }
 
-func (t *TagRepository) TagPost(ctx context.Context, postID int64, tagNames []string) error {
+func (t *TagRepository) TagPost(ctx context.Context, postID int64, tagNames []string) (err error) {
+	start := time.Now()
+	defer func() {
+		t.metrics.RecordDatabaseQueryDuration("tag_post", time.Since(start))
+		t.metrics.IncrementTagOperations("tag_post", err == nil)
+	}()
+
 	if len(tagNames) == 0 {
 		return nil
 	}
 
-	_, err := t.db.Exec(ctx, "SELECT 1 FROM posts WHERE id = @post_id", pgx.NamedArgs{"post_id": postID})
+	_, err = t.db.Exec(ctx, "SELECT 1 FROM posts WHERE id = @post_id", pgx.NamedArgs{"post_id": postID})
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return custom_errors.ErrPostNotFound
@@ -177,12 +209,18 @@ func (t *TagRepository) TagPost(ctx context.Context, postID int64, tagNames []st
 	return nil
 }
 
-func (t *TagRepository) UntagPost(ctx context.Context, postID int64, tagNames []string) error {
+func (t *TagRepository) UntagPost(ctx context.Context, postID int64, tagNames []string) (err error) {
+	start := time.Now()
+	defer func() {
+		t.metrics.RecordDatabaseQueryDuration("untag_post", time.Since(start))
+		t.metrics.IncrementTagOperations("untag_post", err == nil)
+	}()
+
 	if len(tagNames) == 0 {
 		return nil
 	}
 
-	_, err := t.db.Exec(ctx, "SELECT 1 FROM posts WHERE id = @post_id", pgx.NamedArgs{"post_id": postID})
+	_, err = t.db.Exec(ctx, "SELECT 1 FROM posts WHERE id = @post_id", pgx.NamedArgs{"post_id": postID})
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return custom_errors.ErrPostNotFound
@@ -225,8 +263,14 @@ func (t *TagRepository) UntagPost(ctx context.Context, postID int64, tagNames []
 	return nil
 }
 
-func (t *TagRepository) ReplacePostTags(ctx context.Context, postID int64, newTags []string) error {
-	_, err := t.db.Exec(ctx, "SELECT 1 FROM posts WHERE id = @post_id", pgx.NamedArgs{"post_id": postID})
+func (t *TagRepository) ReplacePostTags(ctx context.Context, postID int64, newTags []string) (err error) {
+	start := time.Now()
+	defer func() {
+		t.metrics.RecordDatabaseQueryDuration("replace_post_tags", time.Since(start))
+		t.metrics.IncrementTagOperations("replace_post_tags", err == nil)
+	}()
+
+	_, err = t.db.Exec(ctx, "SELECT 1 FROM posts WHERE id = @post_id", pgx.NamedArgs{"post_id": postID})
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return custom_errors.ErrPostNotFound

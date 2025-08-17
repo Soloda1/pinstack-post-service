@@ -12,21 +12,29 @@ import (
 
 	"github.com/soloda1/pinstack-proto-definitions/custom_errors"
 
+	model "pinstack-post-service/internal/domain/models"
+
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
-	model "pinstack-post-service/internal/domain/models"
 )
 
 type PostRepository struct {
-	log ports.Logger
-	db  db.PgDB
+	log     ports.Logger
+	db      db.PgDB
+	metrics ports.MetricsProvider
 }
 
-func NewPostRepository(db db.PgDB, log ports.Logger) *PostRepository {
-	return &PostRepository{db: db, log: log}
+func NewPostRepository(db db.PgDB, log ports.Logger, metrics ports.MetricsProvider) *PostRepository {
+	return &PostRepository{db: db, log: log, metrics: metrics}
 }
 
-func (p *PostRepository) Create(ctx context.Context, post *model.Post) (*model.Post, error) {
+func (p *PostRepository) Create(ctx context.Context, post *model.Post) (result *model.Post, err error) {
+	start := time.Now()
+	defer func() {
+		p.metrics.RecordDatabaseQueryDuration("post_create", time.Since(start))
+		p.metrics.IncrementDatabaseQueries("post_create", err == nil)
+	}()
+
 	p.log.Debug("Creating new post", slog.Int64("author_id", post.AuthorID), slog.String("title", post.Title))
 
 	now := pgtype.Timestamptz{Time: time.Now(), Valid: true}
@@ -45,7 +53,7 @@ func (p *PostRepository) Create(ctx context.Context, post *model.Post) (*model.P
 		RETURNING id, author_id, title, content, created_at, updated_at`
 
 	var createdPost model.Post
-	err := p.db.QueryRow(ctx, query, args).Scan(
+	err = p.db.QueryRow(ctx, query, args).Scan(
 		&createdPost.ID,
 		&createdPost.AuthorID,
 		&createdPost.Title,
@@ -63,7 +71,13 @@ func (p *PostRepository) Create(ctx context.Context, post *model.Post) (*model.P
 	return &createdPost, nil
 }
 
-func (p *PostRepository) GetByID(ctx context.Context, id int64) (*model.Post, error) {
+func (p *PostRepository) GetByID(ctx context.Context, id int64) (result *model.Post, err error) {
+	start := time.Now()
+	defer func() {
+		p.metrics.RecordDatabaseQueryDuration("post_get_by_id", time.Since(start))
+		p.metrics.IncrementDatabaseQueries("post_get_by_id", err == nil)
+	}()
+
 	p.log.Debug("Getting post by ID", slog.Int64("id", id))
 
 	args := pgx.NamedArgs{"id": id}
@@ -71,7 +85,7 @@ func (p *PostRepository) GetByID(ctx context.Context, id int64) (*model.Post, er
 				FROM posts WHERE id = @id`
 	row := p.db.QueryRow(ctx, query, args)
 	post := &model.Post{}
-	err := row.Scan(
+	err = row.Scan(
 		&post.ID,
 		&post.AuthorID,
 		&post.Title,
@@ -91,7 +105,13 @@ func (p *PostRepository) GetByID(ctx context.Context, id int64) (*model.Post, er
 	return post, nil
 }
 
-func (p *PostRepository) GetByAuthor(ctx context.Context, authorID int64) ([]*model.Post, error) {
+func (p *PostRepository) GetByAuthor(ctx context.Context, authorID int64) (result []*model.Post, err error) {
+	start := time.Now()
+	defer func() {
+		p.metrics.RecordDatabaseQueryDuration("post_get_by_author", time.Since(start))
+		p.metrics.IncrementDatabaseQueries("post_get_by_author", err == nil)
+	}()
+
 	p.log.Debug("Getting posts by author", slog.Int64("author_id", authorID))
 
 	args := pgx.NamedArgs{"author_id": authorID}
@@ -132,7 +152,13 @@ func (p *PostRepository) GetByAuthor(ctx context.Context, authorID int64) ([]*mo
 	return posts, nil
 }
 
-func (p *PostRepository) Update(ctx context.Context, id int64, update *model.UpdatePostDTO) (*model.Post, error) {
+func (p *PostRepository) Update(ctx context.Context, id int64, update *model.UpdatePostDTO) (result *model.Post, err error) {
+	start := time.Now()
+	defer func() {
+		p.metrics.RecordDatabaseQueryDuration("post_update", time.Since(start))
+		p.metrics.IncrementDatabaseQueries("post_update", err == nil)
+	}()
+
 	p.log.Debug("Updating post", slog.Int64("id", id), slog.Any("update_fields", map[string]bool{
 		"title":   update.Title != nil,
 		"content": update.Content != nil,
@@ -165,7 +191,7 @@ func (p *PostRepository) Update(ctx context.Context, id int64, update *model.Upd
 	query := "UPDATE posts SET " + strings.Join(setClauses, ", ") + " WHERE id = @id RETURNING id, author_id, title, content, created_at, updated_at"
 
 	var updatedPost model.Post
-	err := p.db.QueryRow(ctx, query, args).Scan(
+	err = p.db.QueryRow(ctx, query, args).Scan(
 		&updatedPost.ID,
 		&updatedPost.AuthorID,
 		&updatedPost.Title,
@@ -188,7 +214,13 @@ func (p *PostRepository) Update(ctx context.Context, id int64, update *model.Upd
 	return &updatedPost, nil
 }
 
-func (p *PostRepository) Delete(ctx context.Context, id int64) error {
+func (p *PostRepository) Delete(ctx context.Context, id int64) (err error) {
+	start := time.Now()
+	defer func() {
+		p.metrics.RecordDatabaseQueryDuration("post_delete", time.Since(start))
+		p.metrics.IncrementDatabaseQueries("post_delete", err == nil)
+	}()
+
 	p.log.Debug("Deleting post", slog.Int64("id", id))
 	args := pgx.NamedArgs{"id": id}
 	query := `DELETE FROM posts WHERE id = @id`
@@ -205,7 +237,13 @@ func (p *PostRepository) Delete(ctx context.Context, id int64) error {
 	return nil
 }
 
-func (p *PostRepository) List(ctx context.Context, filters model.PostFilters) ([]*model.Post, int, error) {
+func (p *PostRepository) List(ctx context.Context, filters model.PostFilters) (posts []*model.Post, total int, err error) {
+	start := time.Now()
+	defer func() {
+		p.metrics.RecordDatabaseQueryDuration("post_list", time.Since(start))
+		p.metrics.IncrementDatabaseQueries("post_list", err == nil)
+	}()
+
 	p.log.Debug("Listing posts with filters",
 		slog.Any("author_id", filters.AuthorID),
 		slog.Any("created_after", filters.CreatedAfter),
@@ -276,7 +314,6 @@ func (p *PostRepository) List(ctx context.Context, filters model.PostFilters) ([
 	}
 	defer rows.Close()
 
-	var posts []*model.Post
 	for rows.Next() {
 		var post model.Post
 		err := rows.Scan(
@@ -321,7 +358,6 @@ func (p *PostRepository) List(ctx context.Context, filters model.PostFilters) ([
 		}
 	}
 
-	var total int
 	p.log.Debug("Executing count query", slog.String("count_query", countQuery), slog.Any("args_keys", countArgs))
 	err = p.db.QueryRow(ctx, countQuery, countArgs).Scan(&total)
 	if err != nil {

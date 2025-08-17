@@ -8,7 +8,7 @@ import (
 	"strconv"
 	"time"
 
-	"pinstack-post-service/internal/domain/models"
+	model "pinstack-post-service/internal/domain/models"
 	ports "pinstack-post-service/internal/domain/ports/output"
 
 	"github.com/soloda1/pinstack-proto-definitions/custom_errors"
@@ -20,18 +20,21 @@ const (
 )
 
 type PostCache struct {
-	client *Client
-	log    ports.Logger
+	client  *Client
+	log     ports.Logger
+	metrics ports.MetricsProvider
 }
 
-func NewPostCache(client *Client, log ports.Logger) *PostCache {
+func NewPostCache(client *Client, log ports.Logger, metrics ports.MetricsProvider) *PostCache {
 	return &PostCache{
-		client: client,
-		log:    log,
+		client:  client,
+		log:     log,
+		metrics: metrics,
 	}
 }
 
 func (p *PostCache) GetPost(ctx context.Context, postID int64) (*model.PostDetailed, error) {
+	start := time.Now()
 	key := p.getPostKey(postID)
 
 	var post model.PostDetailed
@@ -39,19 +42,25 @@ func (p *PostCache) GetPost(ctx context.Context, postID int64) (*model.PostDetai
 	if err != nil {
 		if errors.Is(err, custom_errors.ErrCacheMiss) {
 			p.log.Debug("Post cache miss", slog.Int64("post_id", postID))
+			p.metrics.IncrementCacheMisses()
+			p.metrics.RecordCacheMissDuration("post_get", time.Since(start))
 			return nil, custom_errors.ErrCacheMiss
 		}
 		p.log.Error("Failed to get post from cache",
 			slog.Int64("post_id", postID),
 			slog.String("error", err.Error()))
+		p.metrics.RecordCacheOperationDuration("post_get", time.Since(start))
 		return nil, fmt.Errorf("failed to get post from cache: %w", err)
 	}
 
+	p.metrics.IncrementCacheHits()
+	p.metrics.RecordCacheHitDuration("post_get", time.Since(start))
 	p.log.Debug("Post cache hit", slog.Int64("post_id", postID))
 	return &post, nil
 }
 
 func (p *PostCache) SetPost(ctx context.Context, post *model.PostDetailed) error {
+	start := time.Now()
 	if post == nil {
 		return fmt.Errorf("post cannot be nil")
 	}
@@ -65,9 +74,11 @@ func (p *PostCache) SetPost(ctx context.Context, post *model.PostDetailed) error
 		p.log.Error("Failed to set post cache",
 			slog.Int64("post_id", post.Post.ID),
 			slog.String("error", err.Error()))
+		p.metrics.RecordCacheOperationDuration("post_set", time.Since(start))
 		return fmt.Errorf("failed to set post cache: %w", err)
 	}
 
+	p.metrics.RecordCacheOperationDuration("post_set", time.Since(start))
 	p.log.Debug("Post cached successfully",
 		slog.Int64("post_id", post.Post.ID),
 		slog.Duration("ttl", postCacheTTL))
@@ -75,15 +86,18 @@ func (p *PostCache) SetPost(ctx context.Context, post *model.PostDetailed) error
 }
 
 func (p *PostCache) DeletePost(ctx context.Context, postID int64) error {
+	start := time.Now()
 	key := p.getPostKey(postID)
 
 	if err := p.client.Delete(ctx, key); err != nil {
 		p.log.Error("Failed to delete post from cache",
 			slog.Int64("post_id", postID),
 			slog.String("error", err.Error()))
+		p.metrics.RecordCacheOperationDuration("post_delete", time.Since(start))
 		return fmt.Errorf("failed to delete post from cache: %w", err)
 	}
 
+	p.metrics.RecordCacheOperationDuration("post_delete", time.Since(start))
 	p.log.Debug("Post deleted from cache", slog.Int64("post_id", postID))
 	return nil
 }
