@@ -106,6 +106,7 @@ func (p *PostRepository) GetByID(ctx context.Context, id int64) (*model.Post, er
 }
 
 func (p *PostRepository) GetByAuthor(ctx context.Context, authorID int64) ([]*model.Post, error) {
+	start := time.Now()
 	p.log.Debug("Getting posts by author", slog.Int64("author_id", authorID))
 
 	args := pgx.NamedArgs{"author_id": authorID}
@@ -114,6 +115,8 @@ func (p *PostRepository) GetByAuthor(ctx context.Context, authorID int64) ([]*mo
 
 	rows, err := p.db.Query(ctx, query, args)
 	if err != nil {
+		p.metrics.IncrementDatabaseQueries("post_get_by_author", false)
+		p.metrics.RecordDatabaseQueryDuration("post_get_by_author", time.Since(start))
 		p.log.Error("Error getting posts by author", slog.Int64("author_id", authorID), slog.String("error", err.Error()))
 		return nil, custom_errors.ErrDatabaseQuery
 	}
@@ -131,6 +134,8 @@ func (p *PostRepository) GetByAuthor(ctx context.Context, authorID int64) ([]*mo
 			&post.UpdatedAt,
 		)
 		if err != nil {
+			p.metrics.IncrementDatabaseQueries("post_get_by_author", false)
+			p.metrics.RecordDatabaseQueryDuration("post_get_by_author", time.Since(start))
 			p.log.Error("Error scanning post during GetByAuthor", slog.Int64("author_id", authorID), slog.String("error", err.Error()))
 			return nil, custom_errors.ErrDatabaseQuery
 		}
@@ -138,15 +143,20 @@ func (p *PostRepository) GetByAuthor(ctx context.Context, authorID int64) ([]*mo
 	}
 
 	if err = rows.Err(); err != nil {
+		p.metrics.IncrementDatabaseQueries("post_get_by_author", false)
+		p.metrics.RecordDatabaseQueryDuration("post_get_by_author", time.Since(start))
 		p.log.Error("Error iterating rows during GetByAuthor", slog.Int64("author_id", authorID), slog.String("error", err.Error()))
 		return nil, custom_errors.ErrDatabaseQuery
 	}
 
+	p.metrics.IncrementDatabaseQueries("post_get_by_author", true)
+	p.metrics.RecordDatabaseQueryDuration("post_get_by_author", time.Since(start))
 	p.log.Debug("Successfully retrieved posts by author", slog.Int64("author_id", authorID), slog.Int("count", len(posts)))
 	return posts, nil
 }
 
 func (p *PostRepository) Update(ctx context.Context, id int64, update *model.UpdatePostDTO) (*model.Post, error) {
+	start := time.Now()
 	p.log.Debug("Updating post", slog.Int64("id", id), slog.Any("update_fields", map[string]bool{
 		"title":   update.Title != nil,
 		"content": update.Content != nil,
@@ -171,6 +181,8 @@ func (p *PostRepository) Update(ctx context.Context, id int64, update *model.Upd
 	args["updated_at"] = updatedAt
 
 	if len(setClauses) == 0 {
+		p.metrics.IncrementDatabaseQueries("post_update", false)
+		p.metrics.RecordDatabaseQueryDuration("post_update", time.Since(start))
 		p.log.Debug("No fields to update", slog.Int64("id", id))
 		return nil, custom_errors.ErrNoUpdateRows
 	}
@@ -190,36 +202,50 @@ func (p *PostRepository) Update(ctx context.Context, id int64, update *model.Upd
 
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
+			p.metrics.IncrementDatabaseQueries("post_update", false)
+			p.metrics.RecordDatabaseQueryDuration("post_update", time.Since(start))
 			p.log.Debug("Post not found by id during Update", slog.Int64("id", id), slog.String("error", err.Error()))
 			return nil, custom_errors.ErrPostNotFound
 		}
+		p.metrics.IncrementDatabaseQueries("post_update", false)
+		p.metrics.RecordDatabaseQueryDuration("post_update", time.Since(start))
 		p.log.Error("Error updating post", slog.Int64("id", id), slog.String("error", err.Error()))
 		return nil, custom_errors.ErrDatabaseQuery
 	}
 
+	p.metrics.IncrementDatabaseQueries("post_update", true)
+	p.metrics.RecordDatabaseQueryDuration("post_update", time.Since(start))
 	p.log.Debug("Successfully updated post", slog.Int64("id", updatedPost.ID), slog.Int64("author_id", updatedPost.AuthorID),
 		slog.Time("updated_at", updatedPost.UpdatedAt.Time))
 	return &updatedPost, nil
 }
 
 func (p *PostRepository) Delete(ctx context.Context, id int64) error {
+	start := time.Now()
 	p.log.Debug("Deleting post", slog.Int64("id", id))
 	args := pgx.NamedArgs{"id": id}
 	query := `DELETE FROM posts WHERE id = @id`
 	result, err := p.db.Exec(ctx, query, args)
 	if err != nil {
+		p.metrics.IncrementDatabaseQueries("post_delete", false)
+		p.metrics.RecordDatabaseQueryDuration("post_delete", time.Since(start))
 		p.log.Error("Error deleting post", slog.Int64("id", id), slog.String("error", err.Error()))
 		return custom_errors.ErrDatabaseQuery
 	}
 	if result.RowsAffected() == 0 {
+		p.metrics.IncrementDatabaseQueries("post_delete", false)
+		p.metrics.RecordDatabaseQueryDuration("post_delete", time.Since(start))
 		p.log.Debug("Post not found during deletion", slog.Int64("id", id))
 		return custom_errors.ErrPostNotFound
 	}
+	p.metrics.IncrementDatabaseQueries("post_delete", true)
+	p.metrics.RecordDatabaseQueryDuration("post_delete", time.Since(start))
 	p.log.Debug("Successfully deleted post", slog.Int64("id", id))
 	return nil
 }
 
 func (p *PostRepository) List(ctx context.Context, filters model.PostFilters) ([]*model.Post, int, error) {
+	start := time.Now()
 	p.log.Debug("Listing posts with filters",
 		slog.Any("author_id", filters.AuthorID),
 		slog.Any("created_after", filters.CreatedAfter),
@@ -339,10 +365,14 @@ func (p *PostRepository) List(ctx context.Context, filters model.PostFilters) ([
 	p.log.Debug("Executing count query", slog.String("count_query", countQuery), slog.Any("args_keys", countArgs))
 	err = p.db.QueryRow(ctx, countQuery, countArgs).Scan(&total)
 	if err != nil {
+		p.metrics.IncrementDatabaseQueries("post_list", false)
+		p.metrics.RecordDatabaseQueryDuration("post_list", time.Since(start))
 		p.log.Error("Error counting posts", slog.String("error", err.Error()))
 		return nil, 0, custom_errors.ErrDatabaseQuery
 	}
 	p.log.Debug("Count query result", slog.Int("total", total))
 
+	p.metrics.IncrementDatabaseQueries("post_list", true)
+	p.metrics.RecordDatabaseQueryDuration("post_list", time.Since(start))
 	return posts, total, nil
 }
