@@ -91,13 +91,16 @@ jobs:
         echo "Parent directory:"
         ls -la ../
         echo "POST_SERVICE_CONTEXT will be set to: ../"
+    
+    - name: Create docker network
+      run: docker network create pinstack-test || true
 
     - name: Start Full Infrastructure for Integration Tests
       working-directory: pinstack-system-tests
       env:
         POST_SERVICE_CONTEXT: ../
       run: |
-        # Запускаем все необходимые контейнеры для интеграционных тестов
+        echo "🚀 Запускаем все необходимые контейнеры для интеграционных тестов..."
         docker compose -f docker-compose.test.yml up -d \
           user-db-test \
           user-migrator-test \
