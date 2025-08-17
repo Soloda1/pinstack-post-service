@@ -87,7 +87,6 @@ func main() {
 
 	userCache := redis_cache.NewUserCache(redisClient, log)
 	postCache := redis_cache.NewPostCache(redisClient, log)
-	tagCache := redis_cache.NewTagCache(redisClient, log)
 
 	unitOfWork := postgres.NewPostgresUOW(pool, log)
 	postRepo := post_postgres.NewPostRepository(pool, log)
@@ -100,7 +99,6 @@ func main() {
 		originalPostService,
 		userCache,
 		postCache,
-		tagCache,
 		log,
 	)
 
