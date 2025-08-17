@@ -150,6 +150,7 @@ func (d *PostServiceCacheDecorator) ListPosts(ctx context.Context, filters *mode
 		userGetStart := time.Now()
 		if cachedUser, err := d.userCache.GetUser(ctx, authorID); err == nil {
 			d.log.Debug("Author found in cache", slog.Int64("author_id", authorID))
+			d.metrics.IncrementCacheHits()
 			d.metrics.RecordCacheHitDuration("user_get", time.Since(userGetStart))
 			for _, post := range posts {
 				if post.Post != nil && post.Post.AuthorID == authorID {
@@ -158,6 +159,7 @@ func (d *PostServiceCacheDecorator) ListPosts(ctx context.Context, filters *mode
 			}
 		} else {
 			if errors.Is(err, custom_errors.ErrCacheMiss) {
+				d.metrics.IncrementCacheMisses()
 				d.metrics.RecordCacheMissDuration("user_get", time.Since(userGetStart))
 			} else {
 				d.metrics.RecordCacheOperationDuration("user_get", time.Since(userGetStart))
