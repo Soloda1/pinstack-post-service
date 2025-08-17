@@ -22,19 +22,20 @@ func NewMediaRepository(db db.PgDB, log ports.Logger, metrics ports.MetricsProvi
 	return &MediaRepository{db: db, log: log, metrics: metrics}
 }
 
-func (m *MediaRepository) Attach(ctx context.Context, postID int64, media []*model.PostMedia) error {
+func (m *MediaRepository) Attach(ctx context.Context, postID int64, media []*model.PostMedia) (err error) {
 	start := time.Now()
-	var exists bool
-	err := m.db.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM posts WHERE id = @post_id)`, pgx.NamedArgs{"post_id": postID}).Scan(&exists)
-	if err != nil {
-		m.metrics.IncrementDatabaseQueries("media_attach", false)
+	defer func() {
 		m.metrics.RecordDatabaseQueryDuration("media_attach", time.Since(start))
+		m.metrics.IncrementDatabaseQueries("media_attach", err == nil)
+	}()
+
+	var exists bool
+	err = m.db.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM posts WHERE id = @post_id)`, pgx.NamedArgs{"post_id": postID}).Scan(&exists)
+	if err != nil {
 		m.log.Error("Failed to get post by id in Attach media", slog.Int64("post_id", postID), slog.String("err", err.Error()))
 		return custom_errors.ErrDatabaseQuery
 	}
 	if !exists {
-		m.metrics.IncrementDatabaseQueries("media_attach", false)
-		m.metrics.RecordDatabaseQueryDuration("media_attach", time.Since(start))
 		m.log.Warn("Post not found during media attach", slog.Int64("post_id", postID))
 		return custom_errors.ErrPostNotFound
 	}
@@ -55,19 +56,20 @@ func (m *MediaRepository) Attach(ctx context.Context, postID int64, media []*mod
 		}
 	}(result)
 
-	if _, err := result.Exec(); err != nil {
+	if _, err = result.Exec(); err != nil {
 		m.log.Error("Media attach failed", slog.String("error", err.Error()), slog.Int64("post_id", postID))
-		m.metrics.IncrementDatabaseQueries("media_attach", false)
-		m.metrics.RecordDatabaseQueryDuration("media_attach", time.Since(start))
 		return custom_errors.ErrMediaAttachFailed
 	}
-	m.metrics.IncrementDatabaseQueries("media_attach", true)
-	m.metrics.RecordDatabaseQueryDuration("media_attach", time.Since(start))
 	return nil
 }
 
-func (m *MediaRepository) Reorder(ctx context.Context, postID int64, newPositions map[int64]int) error {
+func (m *MediaRepository) Reorder(ctx context.Context, postID int64, newPositions map[int64]int) (err error) {
 	start := time.Now()
+	defer func() {
+		m.metrics.RecordDatabaseQueryDuration("media_reorder", time.Since(start))
+		m.metrics.IncrementDatabaseQueries("media_reorder", err == nil)
+	}()
+
 	batch := &pgx.Batch{}
 	for mediaID, position := range newPositions {
 		batch.Queue(
@@ -84,70 +86,68 @@ func (m *MediaRepository) Reorder(ctx context.Context, postID int64, newPosition
 		}
 	}(result)
 
-	if _, err := result.Exec(); err != nil {
+	if _, err = result.Exec(); err != nil {
 		m.log.Error("Media reorder failed", slog.String("error", err.Error()), slog.Int64("post_id", postID))
-		m.metrics.RecordDatabaseQueryDuration("media_reorder", time.Since(start))
-		m.metrics.IncrementDatabaseQueries("media_reorder", false)
 		return custom_errors.ErrMediaReorderFailed
 	}
-	m.metrics.RecordDatabaseQueryDuration("media_reorder", time.Since(start))
-	m.metrics.IncrementDatabaseQueries("media_reorder", true)
 	return nil
 }
 
-func (m *MediaRepository) Detach(ctx context.Context, mediaIDs []int64) error {
+func (m *MediaRepository) Detach(ctx context.Context, mediaIDs []int64) (err error) {
 	start := time.Now()
-	_, err := m.db.Exec(ctx, `DELETE FROM post_media WHERE id = ANY(@ids)`, pgx.NamedArgs{"ids": mediaIDs})
+	defer func() {
+		m.metrics.RecordDatabaseQueryDuration("media_detach", time.Since(start))
+		m.metrics.IncrementDatabaseQueries("media_detach", err == nil)
+	}()
+
+	_, err = m.db.Exec(ctx, `DELETE FROM post_media WHERE id = ANY(@ids)`, pgx.NamedArgs{"ids": mediaIDs})
 	if err != nil {
 		m.log.Error("Media detach failed", slog.String("error", err.Error()), slog.Any("media_ids", mediaIDs))
-		m.metrics.RecordDatabaseQueryDuration("media_detach", time.Since(start))
-		m.metrics.IncrementDatabaseQueries("media_detach", false)
 		return custom_errors.ErrMediaDetachFailed
 	}
-	m.metrics.RecordDatabaseQueryDuration("media_detach", time.Since(start))
-	m.metrics.IncrementDatabaseQueries("media_detach", true)
 	return nil
 }
 
-func (m *MediaRepository) GetByPost(ctx context.Context, postID int64) ([]*model.PostMedia, error) {
+func (m *MediaRepository) GetByPost(ctx context.Context, postID int64) (media []*model.PostMedia, err error) {
 	start := time.Now()
+	defer func() {
+		m.metrics.RecordDatabaseQueryDuration("media_get_by_post", time.Since(start))
+		m.metrics.IncrementDatabaseQueries("media_get_by_post", err == nil)
+	}()
+
 	rows, err := m.db.Query(ctx, `SELECT id, url, type, position, created_at FROM post_media WHERE post_id = @postID ORDER BY position`, pgx.NamedArgs{"postID": postID})
 	if err != nil {
 		m.log.Error("Media query failed", slog.String("error", err.Error()), slog.Int64("post_id", postID))
-		m.metrics.RecordDatabaseQueryDuration("media_get_by_post", time.Since(start))
-		m.metrics.IncrementDatabaseQueries("media_get_by_post", false)
 		return nil, custom_errors.ErrMediaQueryFailed
 	}
 	defer rows.Close()
 
-	var media []*model.PostMedia
 	for rows.Next() {
 		var pm model.PostMedia
 		if err := rows.Scan(&pm.ID, &pm.URL, &pm.Type, &pm.Position, &pm.CreatedAt); err != nil {
-			m.metrics.RecordDatabaseQueryDuration("media_get_by_post", time.Since(start))
-			m.metrics.IncrementDatabaseQueries("media_get_by_post", false)
 			return nil, custom_errors.ErrDatabaseQuery
 		}
 		media = append(media, &pm)
 	}
 	m.log.Debug("Retrieved media for post", slog.Int64("post_id", postID), slog.Int("count", len(media)))
-	m.metrics.RecordDatabaseQueryDuration("media_get_by_post", time.Since(start))
-	m.metrics.IncrementDatabaseQueries("media_get_by_post", true)
 	return media, nil
 }
 
-func (m *MediaRepository) GetByPosts(ctx context.Context, postIDs []int64) (map[int64][]*model.PostMedia, error) {
+func (m *MediaRepository) GetByPosts(ctx context.Context, postIDs []int64) (result map[int64][]*model.PostMedia, err error) {
 	start := time.Now()
+	defer func() {
+		m.metrics.RecordDatabaseQueryDuration("media_get_by_posts", time.Since(start))
+		m.metrics.IncrementDatabaseQueries("media_get_by_posts", err == nil)
+	}()
+
 	rows, err := m.db.Query(ctx, `SELECT post_id, id, url, type, position, created_at FROM post_media WHERE post_id = ANY(@postIDs) ORDER BY post_id, position`, pgx.NamedArgs{"postIDs": postIDs})
 	if err != nil {
 		m.log.Error("Batch media query failed", slog.String("error", err.Error()), slog.Any("post_ids", postIDs))
-		m.metrics.RecordDatabaseQueryDuration("media_get_by_posts", time.Since(start))
-		m.metrics.IncrementDatabaseQueries("media_get_by_posts", false)
 		return nil, custom_errors.ErrMediaBatchQueryFailed
 	}
 	defer rows.Close()
 
-	result := make(map[int64][]*model.PostMedia)
+	result = make(map[int64][]*model.PostMedia)
 	var currentPostID int64 = -1
 	var mediaGroup []*model.PostMedia
 
@@ -155,8 +155,6 @@ func (m *MediaRepository) GetByPosts(ctx context.Context, postIDs []int64) (map[
 		var postID int64
 		var pm model.PostMedia
 		if err := rows.Scan(&postID, &pm.ID, &pm.URL, &pm.Type, &pm.Position, &pm.CreatedAt); err != nil {
-			m.metrics.RecordDatabaseQueryDuration("media_get_by_posts", time.Since(start))
-			m.metrics.IncrementDatabaseQueries("media_get_by_posts", false)
 			return nil, custom_errors.ErrDatabaseQuery
 		}
 
@@ -174,7 +172,5 @@ func (m *MediaRepository) GetByPosts(ctx context.Context, postIDs []int64) (map[
 		result[currentPostID] = mediaGroup
 	}
 	m.log.Debug("Retrieved media for batch posts", slog.Int("post_count", len(result)))
-	m.metrics.RecordDatabaseQueryDuration("media_get_by_posts", time.Since(start))
-	m.metrics.IncrementDatabaseQueries("media_get_by_posts", true)
 	return result, nil
 }
