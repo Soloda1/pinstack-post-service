@@ -9,7 +9,7 @@ import (
 	output "pinstack-post-service/internal/domain/ports/output"
 	"pinstack-post-service/internal/domain/ports/output/cache"
 
-	"pinstack-post-service/internal/domain/ports/input/post"
+	post_service "pinstack-post-service/internal/domain/ports/input/post"
 
 	"github.com/soloda1/pinstack-proto-definitions/custom_errors"
 )
@@ -18,7 +18,6 @@ type PostServiceCacheDecorator struct {
 	service   post_service.Service
 	userCache cache.UserCache
 	postCache cache.PostCache
-	tagCache  cache.TagCache
 	log       output.Logger
 }
 
@@ -26,14 +25,12 @@ func NewPostServiceCacheDecorator(
 	service post_service.Service,
 	userCache cache.UserCache,
 	postCache cache.PostCache,
-	tagCache cache.TagCache,
 	log output.Logger,
 ) post_service.Service {
 	return &PostServiceCacheDecorator{
 		service:   service,
 		userCache: userCache,
 		postCache: postCache,
-		tagCache:  tagCache,
 		log:       log,
 	}
 }
@@ -62,14 +59,6 @@ func (d *PostServiceCacheDecorator) CreatePost(ctx context.Context, post *model.
 		if err := d.userCache.SetUser(ctx, result.Author); err != nil {
 			d.log.Warn("Failed to cache author after post creation",
 				slog.Int64("user_id", result.Author.ID),
-				slog.String("error", err.Error()))
-		}
-	}
-
-	if len(result.Tags) > 0 {
-		if err := d.tagCache.SetTagsByPost(ctx, result.Post.ID, result.Tags); err != nil {
-			d.log.Warn("Failed to cache tags after post creation",
-				slog.Int64("post_id", result.Post.ID),
 				slog.String("error", err.Error()))
 		}
 	}
@@ -108,14 +97,6 @@ func (d *PostServiceCacheDecorator) GetPostByID(ctx context.Context, id int64) (
 		if err := d.userCache.SetUser(ctx, post.Author); err != nil {
 			d.log.Warn("Failed to cache author",
 				slog.Int64("user_id", post.Author.ID),
-				slog.String("error", err.Error()))
-		}
-	}
-
-	if len(post.Tags) > 0 {
-		if err := d.tagCache.SetTagsByPost(ctx, post.Post.ID, post.Tags); err != nil {
-			d.log.Warn("Failed to cache tags",
-				slog.Int64("post_id", post.Post.ID),
 				slog.String("error", err.Error()))
 		}
 	}
@@ -160,16 +141,6 @@ func (d *PostServiceCacheDecorator) ListPosts(ctx context.Context, filters *mode
 		}
 	}
 
-	for _, post := range posts {
-		if post.Post != nil && len(post.Tags) > 0 {
-			if err := d.tagCache.SetTagsByPost(ctx, post.Post.ID, post.Tags); err != nil {
-				d.log.Warn("Failed to cache tags for post in list",
-					slog.Int64("post_id", post.Post.ID),
-					slog.String("error", err.Error()))
-			}
-		}
-	}
-
 	return posts, total, nil
 }
 
@@ -189,12 +160,6 @@ func (d *PostServiceCacheDecorator) UpdatePost(ctx context.Context, userID int64
 			slog.String("error", err.Error()))
 	}
 
-	if err := d.tagCache.DeleteTagsByPost(ctx, id); err != nil {
-		d.log.Warn("Failed to invalidate tags cache after update",
-			slog.Int64("post_id", id),
-			slog.String("error", err.Error()))
-	}
-
 	return nil
 }
 
@@ -210,12 +175,6 @@ func (d *PostServiceCacheDecorator) DeletePost(ctx context.Context, userID int64
 
 	if err := d.postCache.DeletePost(ctx, id); err != nil {
 		d.log.Warn("Failed to invalidate post cache after deletion",
-			slog.Int64("post_id", id),
-			slog.String("error", err.Error()))
-	}
-
-	if err := d.tagCache.DeleteTagsByPost(ctx, id); err != nil {
-		d.log.Warn("Failed to invalidate tags cache after deletion",
 			slog.Int64("post_id", id),
 			slog.String("error", err.Error()))
 	}
