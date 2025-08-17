@@ -8,7 +8,7 @@ import (
 	"strconv"
 	"time"
 
-	"pinstack-post-service/internal/domain/models"
+	model "pinstack-post-service/internal/domain/models"
 	ports "pinstack-post-service/internal/domain/ports/output"
 
 	"github.com/soloda1/pinstack-proto-definitions/custom_errors"
@@ -20,23 +20,27 @@ const (
 )
 
 type PostCache struct {
-	client *Client
-	log    ports.Logger
+	client  *Client
+	log     ports.Logger
+	metrics ports.MetricsProvider
 }
 
-func NewPostCache(client *Client, log ports.Logger) *PostCache {
+func NewPostCache(client *Client, log ports.Logger, metrics ports.MetricsProvider) *PostCache {
 	return &PostCache{
-		client: client,
-		log:    log,
+		client:  client,
+		log:     log,
+		metrics: metrics,
 	}
 }
 
 func (p *PostCache) GetPost(ctx context.Context, postID int64) (*model.PostDetailed, error) {
+	start := time.Now()
 	key := p.getPostKey(postID)
 
 	var post model.PostDetailed
 	err := p.client.Get(ctx, key, &post)
 	if err != nil {
+		p.metrics.RecordCacheOperationDuration("get", time.Since(start))
 		if errors.Is(err, custom_errors.ErrCacheMiss) {
 			p.log.Debug("Post cache miss", slog.Int64("post_id", postID))
 			return nil, custom_errors.ErrCacheMiss
@@ -47,6 +51,7 @@ func (p *PostCache) GetPost(ctx context.Context, postID int64) (*model.PostDetai
 		return nil, fmt.Errorf("failed to get post from cache: %w", err)
 	}
 
+	p.metrics.RecordCacheOperationDuration("get", time.Since(start))
 	p.log.Debug("Post cache hit", slog.Int64("post_id", postID))
 	return &post, nil
 }

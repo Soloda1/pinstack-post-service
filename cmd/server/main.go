@@ -2,17 +2,14 @@ package main
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log/slog"
-	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 
@@ -20,9 +17,11 @@ import (
 	"pinstack-post-service/internal/infrastructure/config"
 	delivery_grpc "pinstack-post-service/internal/infrastructure/inbound/grpc"
 	post_grpc "pinstack-post-service/internal/infrastructure/inbound/grpc/post"
+	metrics_server "pinstack-post-service/internal/infrastructure/inbound/metrics"
 	"pinstack-post-service/internal/infrastructure/logger"
 	redis_cache "pinstack-post-service/internal/infrastructure/outbound/cache/redis"
 	user_client "pinstack-post-service/internal/infrastructure/outbound/client/user"
+	prometheus_metrics "pinstack-post-service/internal/infrastructure/outbound/metrics/prometheus"
 	media_postgres "pinstack-post-service/internal/infrastructure/outbound/repository/media/postgres"
 	post_postgres "pinstack-post-service/internal/infrastructure/outbound/repository/post/postgres"
 	"pinstack-post-service/internal/infrastructure/outbound/repository/postgres"
@@ -85,31 +84,32 @@ func main() {
 		}
 	}()
 
-	userCache := redis_cache.NewUserCache(redisClient, log)
-	postCache := redis_cache.NewPostCache(redisClient, log)
+	metrics := prometheus_metrics.NewPrometheusMetricsProvider()
 
-	unitOfWork := postgres.NewPostgresUOW(pool, log)
-	postRepo := post_postgres.NewPostRepository(pool, log)
+	metrics.SetServiceHealth(true)
+
+	userCache := redis_cache.NewUserCache(redisClient, log, metrics)
+	postCache := redis_cache.NewPostCache(redisClient, log, metrics)
+
+	unitOfWork := postgres.NewPostgresUOW(pool, log, metrics)
+	postRepo := post_postgres.NewPostRepository(pool, log, metrics)
 	tagRepo := tag_postgres.NewTagRepository(pool, log)
 	mediaRepo := media_postgres.NewMediaRepository(pool, log)
 
-	originalPostService := post_service.NewPostService(postRepo, tagRepo, mediaRepo, unitOfWork, log, userClient)
+	originalPostService := post_service.NewPostService(postRepo, tagRepo, mediaRepo, unitOfWork, log, userClient, metrics)
 
 	postService := post_service.NewPostServiceCacheDecorator(
 		originalPostService,
 		userCache,
 		postCache,
 		log,
+		metrics,
 	)
 
 	postGRPCApi := post_grpc.NewPostGRPCService(postService, log)
-	grpcServer := delivery_grpc.NewServer(postGRPCApi, cfg.GRPCServer.Address, cfg.GRPCServer.Port, log)
+	grpcServer := delivery_grpc.NewServer(postGRPCApi, cfg.GRPCServer.Address, cfg.GRPCServer.Port, log, metrics)
 
-	metricsAddr := fmt.Sprintf("%s:%d", cfg.Prometheus.Address, cfg.Prometheus.Port)
-	metricsServer := &http.Server{
-		Addr:    metricsAddr,
-		Handler: nil,
-	}
+	metricsServer := metrics_server.NewMetricsServer(cfg.Prometheus.Address, cfg.Prometheus.Port, log)
 
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, os.Interrupt, syscall.SIGTERM)
@@ -124,17 +124,17 @@ func main() {
 		done <- true
 	}()
 
-	http.Handle("/metrics", promhttp.Handler())
 	go func() {
-		log.Info("Starting Prometheus metrics server", slog.String("address", metricsAddr))
-		if err := metricsServer.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			log.Error("Prometheus metrics server error", slog.String("error", err.Error()))
+		if err := metricsServer.Run(); err != nil {
+			log.Error("Metrics server error", slog.String("error", err.Error()))
 		}
 		metricsDone <- true
 	}()
 
 	<-quit
 	log.Info("Shutting down servers...")
+
+	metrics.SetServiceHealth(false)
 
 	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer shutdownCancel()

@@ -8,7 +8,7 @@ import (
 	"strconv"
 	"time"
 
-	"pinstack-post-service/internal/domain/models"
+	model "pinstack-post-service/internal/domain/models"
 	ports "pinstack-post-service/internal/domain/ports/output"
 
 	"github.com/soloda1/pinstack-proto-definitions/custom_errors"
@@ -20,14 +20,16 @@ const (
 )
 
 type UserCache struct {
-	client *Client
-	log    ports.Logger
+	client  *Client
+	log     ports.Logger
+	metrics ports.MetricsProvider
 }
 
-func NewUserCache(client *Client, log ports.Logger) *UserCache {
+func NewUserCache(client *Client, log ports.Logger, metrics ports.MetricsProvider) *UserCache {
 	return &UserCache{
-		client: client,
-		log:    log,
+		client:  client,
+		log:     log,
+		metrics: metrics,
 	}
 }
 

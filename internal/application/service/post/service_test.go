@@ -3,6 +3,7 @@ package post_service
 import (
 	"context"
 	"errors"
+	"pinstack-post-service/internal/infrastructure/outbound/metrics/prometheus"
 	"testing"
 
 	"github.com/soloda1/pinstack-proto-definitions/custom_errors"
@@ -288,12 +289,13 @@ func TestPostService_CreatePost(t *testing.T) {
 			uow := new(postgres_mock.UnitOfWork)
 			userClient := new(user_client_mock.Client)
 			tx := new(postgres_mock.Transaction)
+			metrics := prometheus.NewPrometheusMetricsProvider()
 
 			if tt.mocks != nil {
 				tt.mocks(postRepo, tagRepo, mediaRepo, uow, userClient, tx)
 			}
 
-			s := NewPostService(postRepo, tagRepo, mediaRepo, uow, log, userClient)
+			s := NewPostService(postRepo, tagRepo, mediaRepo, uow, log, userClient, metrics)
 			got, err := s.CreatePost(tt.args.ctx, tt.args.post)
 
 			if tt.wantErr {
@@ -417,12 +419,13 @@ func TestPostService_GetPostByID(t *testing.T) {
 			userClient := new(user_client_mock.Client)
 			// uow is not used in GetPostByID, so we don't need to mock it here
 			uow := new(postgres_mock.UnitOfWork)
+			metrics := prometheus.NewPrometheusMetricsProvider()
 
 			if tt.mocks != nil {
 				tt.mocks(postRepo, mediaRepo, tagRepo, userClient)
 			}
 
-			s := NewPostService(postRepo, tagRepo, mediaRepo, uow, log, userClient)
+			s := NewPostService(postRepo, tagRepo, mediaRepo, uow, log, userClient, metrics)
 			got, err := s.GetPostByID(tt.args.ctx, tt.args.postID)
 
 			if tt.wantErr {
@@ -634,12 +637,13 @@ func TestPostService_ListPosts(t *testing.T) {
 			mediaRepo := new(media_repository_mock.Repository)
 			userClient := new(user_client_mock.Client)
 			uow := new(postgres_mock.UnitOfWork) // Not used directly in ListPosts but part of service struct
+			metrics := prometheus.NewPrometheusMetricsProvider()
 
 			if tt.mocks != nil {
 				tt.mocks(postRepo, mediaRepo, tagRepo, userClient)
 			}
 
-			s := NewPostService(postRepo, tagRepo, mediaRepo, uow, log, userClient)
+			s := NewPostService(postRepo, tagRepo, mediaRepo, uow, log, userClient, metrics)
 			got, total, err := s.ListPosts(tt.args.ctx, tt.args.filters)
 
 			if tt.wantErr {
@@ -910,12 +914,13 @@ func TestPostService_UpdatePost(t *testing.T) {
 			uow := new(postgres_mock.UnitOfWork)
 			userClient := new(user_client_mock.Client) // Not used in UpdatePost but part of service
 			tx := new(postgres_mock.Transaction)
+			metrics := prometheus.NewPrometheusMetricsProvider()
 
 			if tt.mocks != nil {
 				tt.mocks(postRepo, tagRepo, mediaRepo, uow, tx)
 			}
 
-			s := NewPostService(postRepo, tagRepo, mediaRepo, uow, log, userClient)
+			s := NewPostService(postRepo, tagRepo, mediaRepo, uow, log, userClient, metrics)
 			err := s.UpdatePost(tt.args.ctx, tt.args.userID, tt.args.postID, tt.args.post)
 
 			if tt.wantErr {
@@ -1201,12 +1206,13 @@ func TestPostService_DeletePost(t *testing.T) {
 			uow := new(postgres_mock.UnitOfWork)
 			userClient := new(user_client_mock.Client) // Not used in DeletePost but part of service
 			tx := new(postgres_mock.Transaction)
+			metrics := prometheus.NewPrometheusMetricsProvider()
 
 			if tt.mocks != nil {
 				tt.mocks(postRepo, tagRepo, mediaRepo, uow, tx)
 			}
 
-			s := NewPostService(postRepo, tagRepo, mediaRepo, uow, log, userClient)
+			s := NewPostService(postRepo, tagRepo, mediaRepo, uow, log, userClient, metrics)
 			err := s.DeletePost(tt.args.ctx, tt.args.userID, tt.args.postID)
 
 			if tt.wantErr {

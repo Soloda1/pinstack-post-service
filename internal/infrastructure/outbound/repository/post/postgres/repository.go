@@ -12,21 +12,24 @@ import (
 
 	"github.com/soloda1/pinstack-proto-definitions/custom_errors"
 
+	model "pinstack-post-service/internal/domain/models"
+
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
-	model "pinstack-post-service/internal/domain/models"
 )
 
 type PostRepository struct {
-	log ports.Logger
-	db  db.PgDB
+	log     ports.Logger
+	db      db.PgDB
+	metrics ports.MetricsProvider
 }
 
-func NewPostRepository(db db.PgDB, log ports.Logger) *PostRepository {
-	return &PostRepository{db: db, log: log}
+func NewPostRepository(db db.PgDB, log ports.Logger, metrics ports.MetricsProvider) *PostRepository {
+	return &PostRepository{db: db, log: log, metrics: metrics}
 }
 
 func (p *PostRepository) Create(ctx context.Context, post *model.Post) (*model.Post, error) {
+	start := time.Now()
 	p.log.Debug("Creating new post", slog.Int64("author_id", post.AuthorID), slog.String("title", post.Title))
 
 	now := pgtype.Timestamptz{Time: time.Now(), Valid: true}
@@ -55,15 +58,20 @@ func (p *PostRepository) Create(ctx context.Context, post *model.Post) (*model.P
 	)
 
 	if err != nil {
+		p.metrics.IncrementDatabaseQueries("post_create", false)
+		p.metrics.RecordDatabaseQueryDuration("post_create", time.Since(start))
 		p.log.Error("Error creating post", slog.String("error", err.Error()))
 		return nil, custom_errors.ErrDatabaseQuery
 	}
 
+	p.metrics.IncrementDatabaseQueries("post_create", true)
+	p.metrics.RecordDatabaseQueryDuration("post_create", time.Since(start))
 	p.log.Debug("Successfully created post", slog.Int64("id", createdPost.ID), slog.Int64("author_id", createdPost.AuthorID))
 	return &createdPost, nil
 }
 
 func (p *PostRepository) GetByID(ctx context.Context, id int64) (*model.Post, error) {
+	start := time.Now()
 	p.log.Debug("Getting post by ID", slog.Int64("id", id))
 
 	args := pgx.NamedArgs{"id": id}
@@ -81,12 +89,18 @@ func (p *PostRepository) GetByID(ctx context.Context, id int64) (*model.Post, er
 	)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
+			p.metrics.IncrementDatabaseQueries("post_get_by_id", false)
+			p.metrics.RecordDatabaseQueryDuration("post_get_by_id", time.Since(start))
 			p.log.Debug("Post not found by id", slog.Int64("id", id), slog.String("error", err.Error()))
 			return nil, custom_errors.ErrPostNotFound
 		}
+		p.metrics.IncrementDatabaseQueries("post_get_by_id", false)
+		p.metrics.RecordDatabaseQueryDuration("post_get_by_id", time.Since(start))
 		p.log.Error("Error getting post by id", slog.Int64("id", id), slog.String("error", err.Error()))
 		return nil, custom_errors.ErrDatabaseQuery
 	}
+	p.metrics.IncrementDatabaseQueries("post_get_by_id", true)
+	p.metrics.RecordDatabaseQueryDuration("post_get_by_id", time.Since(start))
 	p.log.Debug("Successfully retrieved post by ID", slog.Int64("id", post.ID), slog.Int64("author_id", post.AuthorID))
 	return post, nil
 }

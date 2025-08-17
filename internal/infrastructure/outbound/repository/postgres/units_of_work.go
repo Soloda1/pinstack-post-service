@@ -30,12 +30,13 @@ type Transaction interface {
 }
 
 type PostgresUnitOfWork struct {
-	pool *pgxpool.Pool
-	log  ports.Logger
+	pool    *pgxpool.Pool
+	log     ports.Logger
+	metrics ports.MetricsProvider
 }
 
-func NewPostgresUOW(pool *pgxpool.Pool, log ports.Logger) UnitOfWork {
-	return &PostgresUnitOfWork{pool: pool, log: log}
+func NewPostgresUOW(pool *pgxpool.Pool, log ports.Logger, metrics ports.MetricsProvider) UnitOfWork {
+	return &PostgresUnitOfWork{pool: pool, log: log, metrics: metrics}
 }
 
 func (uow *PostgresUnitOfWork) Begin(ctx context.Context) (Transaction, error) {
@@ -43,12 +44,13 @@ func (uow *PostgresUnitOfWork) Begin(ctx context.Context) (Transaction, error) {
 	if err != nil {
 		return nil, fmt.Errorf("error beginning transaction: %w", err)
 	}
-	return &PostgresTransaction{tx: tx, log: uow.log}, nil
+	return &PostgresTransaction{tx: tx, log: uow.log, metrics: uow.metrics}, nil
 }
 
 type PostgresTransaction struct {
-	tx  pgx.Tx
-	log ports.Logger
+	tx      pgx.Tx
+	log     ports.Logger
+	metrics ports.MetricsProvider
 }
 
 func (t *PostgresTransaction) Commit(ctx context.Context) error {
@@ -60,7 +62,7 @@ func (t *PostgresTransaction) Rollback(ctx context.Context) error {
 }
 
 func (t *PostgresTransaction) PostRepository() post_repository.Repository {
-	return post_repository_postgres.NewPostRepository(t.tx, t.log)
+	return post_repository_postgres.NewPostRepository(t.tx, t.log, t.metrics)
 }
 
 func (t *PostgresTransaction) MediaRepository() media_repository.Repository {

@@ -19,6 +19,7 @@ type PostServiceCacheDecorator struct {
 	userCache cache.UserCache
 	postCache cache.PostCache
 	log       output.Logger
+	metrics   output.MetricsProvider
 }
 
 func NewPostServiceCacheDecorator(
@@ -26,12 +27,14 @@ func NewPostServiceCacheDecorator(
 	userCache cache.UserCache,
 	postCache cache.PostCache,
 	log output.Logger,
+	metrics output.MetricsProvider,
 ) post_service.Service {
 	return &PostServiceCacheDecorator{
 		service:   service,
 		userCache: userCache,
 		postCache: postCache,
 		log:       log,
+		metrics:   metrics,
 	}
 }
 
@@ -72,6 +75,7 @@ func (d *PostServiceCacheDecorator) GetPostByID(ctx context.Context, id int64) (
 	cachedPost, err := d.postCache.GetPost(ctx, id)
 	if err == nil {
 		d.log.Debug("Post found in cache", slog.Int64("post_id", id))
+		d.metrics.IncrementCacheHits()
 		return cachedPost, nil
 	}
 
@@ -79,6 +83,8 @@ func (d *PostServiceCacheDecorator) GetPostByID(ctx context.Context, id int64) (
 		d.log.Warn("Failed to get post from cache",
 			slog.Int64("post_id", id),
 			slog.String("error", err.Error()))
+	} else {
+		d.metrics.IncrementCacheMisses()
 	}
 
 	d.log.Debug("Post cache miss, fetching from service", slog.Int64("post_id", id))
