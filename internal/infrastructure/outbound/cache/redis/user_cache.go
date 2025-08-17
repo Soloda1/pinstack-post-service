@@ -42,6 +42,7 @@ func (u *UserCache) GetUser(ctx context.Context, userID int64) (*model.User, err
 	if err != nil {
 		if errors.Is(err, custom_errors.ErrCacheMiss) {
 			u.log.Debug("User cache miss", slog.Int64("user_id", userID))
+			u.metrics.IncrementCacheMisses()
 			u.metrics.RecordCacheMissDuration("user_get", time.Since(start))
 			return nil, custom_errors.ErrCacheMiss
 		}
@@ -52,6 +53,7 @@ func (u *UserCache) GetUser(ctx context.Context, userID int64) (*model.User, err
 		return nil, fmt.Errorf("failed to get user from cache: %w", err)
 	}
 
+	u.metrics.IncrementCacheHits()
 	u.metrics.RecordCacheHitDuration("user_get", time.Since(start))
 	u.log.Debug("User cache hit", slog.Int64("user_id", userID))
 	return &user, nil

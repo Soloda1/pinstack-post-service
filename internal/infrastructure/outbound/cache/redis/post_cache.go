@@ -42,6 +42,7 @@ func (p *PostCache) GetPost(ctx context.Context, postID int64) (*model.PostDetai
 	if err != nil {
 		if errors.Is(err, custom_errors.ErrCacheMiss) {
 			p.log.Debug("Post cache miss", slog.Int64("post_id", postID))
+			p.metrics.IncrementCacheMisses()
 			p.metrics.RecordCacheMissDuration("post_get", time.Since(start))
 			return nil, custom_errors.ErrCacheMiss
 		}
@@ -52,6 +53,7 @@ func (p *PostCache) GetPost(ctx context.Context, postID int64) (*model.PostDetai
 		return nil, fmt.Errorf("failed to get post from cache: %w", err)
 	}
 
+	p.metrics.IncrementCacheHits()
 	p.metrics.RecordCacheHitDuration("post_get", time.Since(start))
 	p.log.Debug("Post cache hit", slog.Int64("post_id", postID))
 	return &post, nil
