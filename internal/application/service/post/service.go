@@ -88,6 +88,7 @@ func (s *PostService) CreatePost(ctx context.Context, post *model.CreatePostDTO)
 	}
 	createdPost, err := postRepo.Create(ctx, newPost)
 	if err != nil {
+		s.metrics.IncrementPostOperations("create", false)
 		if errors.Is(err, custom_errors.ErrDatabaseQuery) {
 			s.log.Error("Database error in create post", slog.String("error", err.Error()))
 			return nil, custom_errors.ErrDatabaseQuery
@@ -108,11 +109,13 @@ func (s *PostService) CreatePost(ctx context.Context, post *model.CreatePostDTO)
 		}
 		err = mediaRepo.Attach(ctx, createdPost.ID, media)
 		if err != nil {
+			s.metrics.IncrementPostOperations("create", false)
 			s.log.Error("Failed to attach media to post", slog.String("error", err.Error()))
 			return nil, custom_errors.ErrMediaAttachFailed
 		}
 		createdMedia, err = mediaRepo.GetByPost(ctx, createdPost.ID)
 		if err != nil {
+			s.metrics.IncrementPostOperations("create", false)
 			s.log.Error("Failed to get media by post", slog.String("error", err.Error()))
 			return nil, custom_errors.ErrMediaQueryFailed
 		}
@@ -121,6 +124,7 @@ func (s *PostService) CreatePost(ctx context.Context, post *model.CreatePostDTO)
 	if len(post.Tags) > 0 {
 		existingTags, err := tagRepo.FindByNames(ctx, post.Tags)
 		if err != nil {
+			s.metrics.IncrementPostOperations("create", false)
 			s.log.Error("Failed to find existing tags", slog.String("error", err.Error()))
 			return nil, custom_errors.ErrTagQueryFailed
 		}
@@ -139,6 +143,7 @@ func (s *PostService) CreatePost(ctx context.Context, post *model.CreatePostDTO)
 		for _, name := range missingTags {
 			createdTag, tagErr := tagRepo.Create(ctx, name)
 			if tagErr != nil {
+				s.metrics.IncrementPostOperations("create", false)
 				if errors.Is(tagErr, custom_errors.ErrTagCreateFailed) {
 					s.log.Error("Failed to create tag", slog.String("error", tagErr.Error()))
 					return nil, custom_errors.ErrTagCreateFailed
@@ -151,6 +156,7 @@ func (s *PostService) CreatePost(ctx context.Context, post *model.CreatePostDTO)
 
 		tagErr := tagRepo.TagPost(ctx, createdPost.ID, post.Tags)
 		if tagErr != nil {
+			s.metrics.IncrementPostOperations("create", false)
 			if errors.Is(tagErr, custom_errors.ErrPostNotFound) {
 				s.log.Debug("Post not found when adding tags", slog.String("error", tagErr.Error()))
 				return nil, custom_errors.ErrPostNotFound
@@ -174,6 +180,7 @@ func (s *PostService) CreatePost(ctx context.Context, post *model.CreatePostDTO)
 
 	err = tx.Commit(ctx)
 	if err != nil {
+		s.metrics.IncrementPostOperations("create", false)
 		if strings.Contains(err.Error(), "commit unexpectedly resulted in rollback") {
 			s.log.Warn("Transaction commit resulted in rollback", slog.String("error", err.Error()))
 			return nil, custom_errors.ErrDatabaseQuery
@@ -387,9 +394,11 @@ func (s *PostService) UpdatePost(ctx context.Context, userID int64, id int64, po
 		media, err := mediaRepo.GetByPost(ctx, id)
 		if err != nil {
 			if errors.Is(err, custom_errors.ErrMediaNotFound) {
+				s.metrics.IncrementPostOperations("update", false)
 				s.log.Debug("Media not found for update", slog.Int64("id", id))
 				return custom_errors.ErrMediaNotFound
 			}
+			s.metrics.IncrementPostOperations("update", false)
 			s.log.Error("Failed to get post media", slog.String("error", err.Error()), slog.Int64("id", id))
 			return custom_errors.ErrDatabaseQuery
 		}
@@ -399,6 +408,7 @@ func (s *PostService) UpdatePost(ctx context.Context, userID int64, id int64, po
 		}
 		err = mediaRepo.Detach(ctx, mediaIds)
 		if err != nil {
+			s.metrics.IncrementPostOperations("update", false)
 			s.log.Error("Failed to clear media for post", slog.String("error", err.Error()), slog.Int64("id", id))
 			return custom_errors.ErrMediaAttachFailed
 		}
@@ -414,6 +424,7 @@ func (s *PostService) UpdatePost(ctx context.Context, userID int64, id int64, po
 			}
 			err = mediaRepo.Attach(ctx, id, media)
 			if err != nil {
+				s.metrics.IncrementPostOperations("update", false)
 				s.log.Error("Failed to attach media to post", slog.String("error", err.Error()), slog.Int64("id", id))
 				return custom_errors.ErrMediaAttachFailed
 			}
@@ -425,9 +436,11 @@ func (s *PostService) UpdatePost(ctx context.Context, userID int64, id int64, po
 			_, tagErr := tagRepo.Create(ctx, name)
 			if tagErr != nil && !errors.Is(tagErr, custom_errors.ErrTagAlreadyExists) {
 				if errors.Is(tagErr, custom_errors.ErrTagCreateFailed) {
+					s.metrics.IncrementPostOperations("update", false)
 					s.log.Error("Failed to create tag", slog.String("error", tagErr.Error()))
 					return custom_errors.ErrTagCreateFailed
 				}
+				s.metrics.IncrementPostOperations("update", false)
 				s.log.Error("Unknown error creating tag", slog.String("error", tagErr.Error()))
 				return custom_errors.ErrUnknownTagError
 			}
@@ -435,21 +448,26 @@ func (s *PostService) UpdatePost(ctx context.Context, userID int64, id int64, po
 		err = tagRepo.ReplacePostTags(ctx, id, post.Tags)
 		if err != nil {
 			if errors.Is(err, custom_errors.ErrPostNotFound) {
+				s.metrics.IncrementPostOperations("update", false)
 				s.log.Debug("Post not found when tagging", slog.String("error", err.Error()))
 				return custom_errors.ErrPostNotFound
 			}
 			if errors.Is(err, custom_errors.ErrTagNotFound) {
+				s.metrics.IncrementPostOperations("update", false)
 				s.log.Debug("Tag not found when tagging post", slog.String("error", err.Error()))
 				return custom_errors.ErrTagNotFound
 			}
 			if errors.Is(err, custom_errors.ErrTagVerifyPostFailed) {
+				s.metrics.IncrementPostOperations("update", false)
 				s.log.Error("Tag verify post failed", slog.String("error", err.Error()))
 				return custom_errors.ErrTagVerifyPostFailed
 			}
 			if errors.Is(err, custom_errors.ErrTagPost) {
+				s.metrics.IncrementPostOperations("update", false)
 				s.log.Error("Failed to tag post", slog.String("error", err.Error()))
 				return custom_errors.ErrTagPost
 			}
+			s.metrics.IncrementPostOperations("update", false)
 			s.log.Error("Unknown error tagging post", slog.String("error", err.Error()))
 			return err
 		}
@@ -458,9 +476,11 @@ func (s *PostService) UpdatePost(ctx context.Context, userID int64, id int64, po
 	err = tx.Commit(ctx)
 	if err != nil {
 		if strings.Contains(err.Error(), "commit unexpectedly resulted in rollback") {
+			s.metrics.IncrementPostOperations("update", false)
 			s.log.Warn("Transaction commit resulted in rollback", slog.String("error", err.Error()))
 			return custom_errors.ErrDatabaseQuery
 		}
+		s.metrics.IncrementPostOperations("update", false)
 		s.log.Error("Failed to commit transaction", slog.String("error", err.Error()))
 		return custom_errors.ErrDatabaseQuery
 	}
@@ -520,6 +540,7 @@ func (s *PostService) DeletePost(ctx context.Context, userID int64, id int64) (e
 			s.log.Debug("Media not found for post during delete", slog.Int64("id", id))
 			media = nil
 		} else {
+			s.metrics.IncrementPostOperations("delete", false)
 			s.log.Error("Failed to get media for post during delete", slog.String("error", err.Error()), slog.Int64("id", id))
 			return custom_errors.ErrMediaQueryFailed
 		}
@@ -534,6 +555,7 @@ func (s *PostService) DeletePost(ctx context.Context, userID int64, id int64) (e
 			if errors.Is(err, custom_errors.ErrMediaNotFound) {
 				s.log.Debug("Media not found for post during detach", slog.Int64("id", id))
 			} else {
+				s.metrics.IncrementPostOperations("delete", false)
 				s.log.Error("Failed to detach media for post", slog.String("error", err.Error()), slog.Int64("id", id))
 				return custom_errors.ErrMediaDetachFailed
 			}
@@ -546,6 +568,7 @@ func (s *PostService) DeletePost(ctx context.Context, userID int64, id int64) (e
 			s.log.Debug("Tags not found for post during delete", slog.Int64("id", id))
 			tags = nil
 		} else {
+			s.metrics.IncrementPostOperations("delete", false)
 			s.log.Error("Failed to get tags for post during delete", slog.String("error", err.Error()), slog.Int64("id", id))
 			return custom_errors.ErrTagQueryFailed
 		}
@@ -560,6 +583,7 @@ func (s *PostService) DeletePost(ctx context.Context, userID int64, id int64) (e
 			if errors.Is(err, custom_errors.ErrTagNotFound) {
 				s.log.Debug("Tags not found for post during untag", slog.Int64("id", id))
 			} else {
+				s.metrics.IncrementPostOperations("delete", false)
 				s.log.Error("Failed to untag post", slog.String("error", err.Error()), slog.Int64("id", id))
 				return custom_errors.ErrTagDeleteFailed
 			}
