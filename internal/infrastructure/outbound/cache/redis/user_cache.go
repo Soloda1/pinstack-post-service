@@ -34,11 +34,13 @@ func NewUserCache(client *Client, log ports.Logger, metrics ports.MetricsProvide
 }
 
 func (u *UserCache) GetUser(ctx context.Context, userID int64) (*model.User, error) {
+	start := time.Now()
 	key := u.getUserKey(userID)
 
 	var user model.User
 	err := u.client.Get(ctx, key, &user)
 	if err != nil {
+		u.metrics.RecordCacheOperationDuration("get", time.Since(start))
 		if errors.Is(err, custom_errors.ErrCacheMiss) {
 			u.log.Debug("User cache miss", slog.Int64("user_id", userID))
 			return nil, custom_errors.ErrCacheMiss
@@ -49,11 +51,13 @@ func (u *UserCache) GetUser(ctx context.Context, userID int64) (*model.User, err
 		return nil, fmt.Errorf("failed to get user from cache: %w", err)
 	}
 
+	u.metrics.RecordCacheOperationDuration("get", time.Since(start))
 	u.log.Debug("User cache hit", slog.Int64("user_id", userID))
 	return &user, nil
 }
 
 func (u *UserCache) SetUser(ctx context.Context, user *model.User) error {
+	start := time.Now()
 	if user == nil {
 		return fmt.Errorf("user cannot be nil")
 	}
@@ -64,9 +68,11 @@ func (u *UserCache) SetUser(ctx context.Context, user *model.User) error {
 		u.log.Error("Failed to set user cache",
 			slog.Int64("user_id", user.ID),
 			slog.String("error", err.Error()))
+		u.metrics.RecordCacheOperationDuration("set", time.Since(start))
 		return fmt.Errorf("failed to set user cache: %w", err)
 	}
 
+	u.metrics.RecordCacheOperationDuration("set", time.Since(start))
 	u.log.Debug("User cached successfully",
 		slog.Int64("user_id", user.ID),
 		slog.Duration("ttl", userCacheTTL))
@@ -74,15 +80,18 @@ func (u *UserCache) SetUser(ctx context.Context, user *model.User) error {
 }
 
 func (u *UserCache) DeleteUser(ctx context.Context, userID int64) error {
+	start := time.Now()
 	key := u.getUserKey(userID)
 
 	if err := u.client.Delete(ctx, key); err != nil {
 		u.log.Error("Failed to delete user from cache",
 			slog.Int64("user_id", userID),
 			slog.String("error", err.Error()))
+		u.metrics.RecordCacheOperationDuration("delete", time.Since(start))
 		return fmt.Errorf("failed to delete user from cache: %w", err)
 	}
 
+	u.metrics.RecordCacheOperationDuration("delete", time.Since(start))
 	u.log.Debug("User deleted from cache", slog.Int64("user_id", userID))
 	return nil
 }
