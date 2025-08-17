@@ -93,8 +93,8 @@ func main() {
 
 	unitOfWork := postgres.NewPostgresUOW(pool, log, metrics)
 	postRepo := post_postgres.NewPostRepository(pool, log, metrics)
-	tagRepo := tag_postgres.NewTagRepository(pool, log)
-	mediaRepo := media_postgres.NewMediaRepository(pool, log)
+	tagRepo := tag_postgres.NewTagRepository(pool, log, metrics)
+	mediaRepo := media_postgres.NewMediaRepository(pool, log, metrics)
 
 	originalPostService := post_service.NewPostService(postRepo, tagRepo, mediaRepo, unitOfWork, log, userClient, metrics)
 
